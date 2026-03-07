@@ -18,7 +18,7 @@ import { db } from "@/firebase/firebase";
 import { getOrCreatePlayerId, getStoredNickname, persistPlayerContext } from "@/utils/player";
 import { generateRoomCode, normalizeRoomCode } from "@/utils/roomCode";
 import type { Room, Player } from "@/types/room";
-import mafiaImage from "@/public/mafia.jpg";
+import mafiaImage from "@/public/mafia.png";
 
 const DEFAULT_DRAW_TIME = DRAW_TIME_OPTIONS[0];
 const MAX_ROOM_CODE_RETRY = 10;
@@ -257,9 +257,9 @@ export default function HomePage() {
             </div>
           </Card>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-            <Card className="border-dm-primary/20 bg-dm-bg/40 p-5 lg:col-span-3" hover>
-              <div className="flex items-center gap-2">
+          <Card className="border-dm-primary/20 bg-dm-bg/40 p-5 sm:p-7" hover>
+            <div className="mx-auto max-w-3xl text-center">
+              <div className="flex items-center justify-center gap-2">
                 <span className="rounded-full border border-dm-secondary/45 bg-dm-secondary/10 px-2 py-0.5 text-xs text-dm-secondary">
                   MAIN SCREEN
                 </span>
@@ -276,19 +276,10 @@ export default function HomePage() {
               <p className="mt-4 text-sm font-medium text-dm-text-subtext sm:text-base">
                 닉네임을 입력하고 바로 방을 생성하거나, 코드로 입장해 라운드를 시작하세요.
               </p>
-            </Card>
+            </div>
+          </Card>
 
-            <Card className="border-dm-accent/20 bg-dm-bg/40 p-5 lg:col-span-2" hover>
-              <p className="text-xs uppercase tracking-wider text-dm-text-secondary">Game Info</p>
-              <ul className="mt-3 space-y-2 text-sm text-dm-text-secondary">
-                <li className="rounded-md border border-dm-primary/20 bg-dm-bg/60 px-3 py-2">실시간 멀티플레이 동기화</li>
-                <li className="rounded-md border border-dm-secondary/20 bg-dm-bg/60 px-3 py-2">턴 기반 드로잉 + 즉시 투표 집계</li>
-                <li className="rounded-md border border-dm-accent/20 bg-dm-bg/60 px-3 py-2">동일 닉네임 자동 복원 지원</li>
-              </ul>
-            </Card>
-          </div>
-
-          <Card className="space-y-5 border-dm-primary/15 bg-dm-bg/35 p-4 sm:p-5" hover>
+          <Card className="mx-auto w-full max-w-3xl space-y-5 border-dm-primary/15 bg-dm-bg/35 p-4 sm:p-5" hover>
             <label className="block">
               <span className="mb-2 block text-sm font-medium text-dm-text-secondary">닉네임</span>
               <input

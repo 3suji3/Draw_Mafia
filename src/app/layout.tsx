@@ -10,6 +10,11 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "Draw Mafia",
+  icons: {
+    icon: "/mafia-tab.png",
+    shortcut: "/mafia-tab.png",
+    apple: "/mafia-tab.png",
+  },
   description: "실시간 멀티플레이 그림 추리 게임",
 };
 
