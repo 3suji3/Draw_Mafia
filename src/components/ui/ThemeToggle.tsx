@@ -43,7 +43,7 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={toggleTheme}
-      className="fixed right-4 top-4 z-50 rounded-full border border-dm-accent/35 bg-dm-card/90 px-3 py-1.5 text-xs font-semibold text-dm-text-primary shadow-dm-glow transition hover:brightness-110"
+      className="fixed right-4 top-4 z-50 rounded-full border border-dm-primary/35 bg-dm-card/95 px-3 py-1.5 text-xs font-semibold text-dm-text-primary shadow-dm-soft transition hover:-translate-y-[1px] hover:brightness-110"
       aria-label="테마 전환"
     >
       {theme === "dark" ? "☀️ Light" : "🌙 Dark"}

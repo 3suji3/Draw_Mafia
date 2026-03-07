@@ -17,7 +17,8 @@ const CANVAS_HEIGHT = 540;
 
 function drawStroke(
   context: CanvasRenderingContext2D,
-  stroke: Pick<Stroke, "tool" | "color" | "size" | "points">
+  stroke: Pick<Stroke, "tool" | "color" | "size" | "points">,
+  backgroundColor: string
 ) {
   if (stroke.points.length === 0) {
     return;
@@ -26,7 +27,7 @@ function drawStroke(
   context.lineJoin = "round";
   context.lineCap = "round";
   context.lineWidth = stroke.size;
-  context.strokeStyle = stroke.tool === "eraser" ? "#0f172a" : stroke.color;
+  context.strokeStyle = stroke.tool === "eraser" ? backgroundColor : stroke.color;
 
   context.beginPath();
   context.moveTo(stroke.points[0].x, stroke.points[0].y);
@@ -55,6 +56,11 @@ export function CanvasBoard({
     [activePoints, color, size, tool]
   );
 
+  const canvasBackgroundColor =
+    typeof window === "undefined"
+      ? "#111827"
+      : getComputedStyle(document.documentElement).getPropertyValue("--dm-card").trim() || "#111827";
+
   useEffect(() => {
     const canvas = canvasRef.current;
 
@@ -68,17 +74,17 @@ export function CanvasBoard({
       return;
     }
 
-    context.fillStyle = "#0f172a";
+    context.fillStyle = canvasBackgroundColor;
     context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     strokes.forEach((stroke) => {
-      drawStroke(context, stroke);
+      drawStroke(context, stroke, canvasBackgroundColor);
     });
 
     if (activeStroke.points.length > 0) {
-      drawStroke(context, activeStroke);
+      drawStroke(context, activeStroke, canvasBackgroundColor);
     }
-  }, [activeStroke, strokes]);
+  }, [activeStroke, canvasBackgroundColor, strokes]);
 
   const getPointFromEvent = (event: ReactPointerEvent<HTMLCanvasElement>): StrokePoint => {
     const canvas = canvasRef.current;
@@ -150,7 +156,7 @@ export function CanvasBoard({
   };
 
   return (
-    <div className="w-full overflow-hidden rounded-xl border border-slate-700 bg-slate-900">
+    <div className="w-full overflow-hidden rounded-xl border border-dm-accent/20 bg-dm-card">
       <canvas
         ref={canvasRef}
         width={CANVAS_WIDTH}

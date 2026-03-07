@@ -15,7 +15,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { GameDialog } from "@/components/modals/GameDialog";
-import { LoadingSpinner, ToastStack } from "@/components/ui";
+import { Button, Card, LoadingSpinner, ToastStack } from "@/components/ui";
 import { PROMPT_POOL } from "@/constants/prompts";
 import { PLAYER_LIMITS, DRAW_TIME_OPTIONS } from "@/constants/game";
 import { db } from "@/firebase/firebase";
@@ -366,15 +366,15 @@ export default function RoomPage({ params }: RoomPageProps) {
   return (
     <>
       <main className="min-h-screen bg-dm-bg px-4 py-8 text-dm-text-primary sm:px-6 sm:py-10">
-        <section className="mx-auto w-full max-w-4xl rounded-2xl border border-dm-accent/25 bg-dm-card/90 p-5 shadow-dm-glow sm:p-8">
+        <Card className="mx-auto w-full max-w-4xl p-5 sm:p-8" hover>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h1 className="text-3xl font-bold tracking-wide">LOBBY</h1>
+            <h1 className="text-3xl font-semibold tracking-tight">LOBBY</h1>
             <span className="rounded-md border border-dm-accent/40 px-3 py-1 text-xs text-dm-text-secondary">
               ROOM {resolvedRoomId || "-"}
             </span>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 gap-3 rounded-xl border border-dm-accent/20 bg-dm-bg/35 p-4 text-sm sm:grid-cols-3">
+          <Card className="mt-6 grid grid-cols-1 gap-3 border-dm-accent/20 bg-dm-bg/35 p-4 text-sm sm:grid-cols-3">
             <p>
               상태: <span className="font-semibold text-dm-accent">{room?.status ?? "loading"}</span>
             </p>
@@ -384,7 +384,7 @@ export default function RoomPage({ params }: RoomPageProps) {
             <p>
               내 상태: <span className="font-semibold text-dm-text-primary">{currentPlayer ? "입장됨" : "미확인"}</span>
             </p>
-          </div>
+          </Card>
 
           {joinedRoomId && joinedRoomId !== resolvedRoomId ? (
             <p className="mt-3 text-sm text-dm-secondary">
@@ -426,7 +426,7 @@ export default function RoomPage({ params }: RoomPageProps) {
             ) : null}
           </div>
 
-          <div className="mt-8 rounded-xl border border-dm-accent/20 bg-dm-bg/35 p-4">
+          <Card className="mt-8 border-dm-accent/20 bg-dm-bg/35 p-4">
             <h2 className="text-base font-semibold text-dm-text-primary">라운드 설정</h2>
             <p className="mt-1 text-sm text-dm-text-secondary">방장만 drawTime을 변경할 수 있습니다.</p>
 
@@ -435,36 +435,34 @@ export default function RoomPage({ params }: RoomPageProps) {
                 const active = room?.drawTime === seconds;
 
                 return (
-                  <button
+                  <Button
                     key={seconds}
                     type="button"
                     onClick={() => handleDrawTimeChange(seconds)}
                     disabled={!isHost || updatingDrawTime}
-                    className={`rounded-md border px-3 py-2 text-sm transition ${
-                      active
-                        ? "border-dm-accent bg-dm-accent/20 text-dm-text-primary"
-                        : "border-dm-accent/25 bg-dm-bg text-dm-text-secondary hover:bg-dm-card"
-                    } disabled:cursor-not-allowed disabled:opacity-50`}
+                    variant={active ? "secondary" : "ghost"}
+                    className="rounded-xl px-3 py-2 text-sm"
                   >
                     {seconds}초
-                  </button>
+                  </Button>
                 );
               })}
             </div>
-          </div>
+          </Card>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-dm-text-secondary">
               시작 조건: {PLAYER_LIMITS.min}명 이상, 테스트 모드 {PLAYER_LIMITS.testMin}명 허용
             </p>
-            <button
+            <Button
               type="button"
               onClick={handleStartClick}
               disabled={!isHost || !canStartCount || startingGame}
-              className="rounded-md bg-dm-accent px-5 py-2.5 text-sm font-semibold text-dm-text-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              variant="primary"
+              className="px-5 py-2.5"
             >
               {startingGame ? "시작 중..." : "게임 시작"}
-            </button>
+            </Button>
           </div>
 
           {startingGame ? (
@@ -475,24 +473,26 @@ export default function RoomPage({ params }: RoomPageProps) {
 
           <div className="mt-6">
             <div className="flex items-center gap-4">
-              <button
+              <Button
                 type="button"
                 onClick={() => router.push("/")}
-                className="text-sm text-dm-text-secondary underline underline-offset-4"
+                variant="ghost"
+                className="px-3 py-1 text-sm"
               >
                 홈으로 돌아가기
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 onClick={handleLeaveRoom}
                 disabled={leavingRoom}
-                className="text-sm text-dm-secondary underline underline-offset-4 disabled:opacity-50"
+                variant="secondary"
+                className="px-3 py-1 text-sm"
               >
                 {leavingRoom ? "이탈 처리 중..." : "방 나가기"}
-              </button>
+              </Button>
             </div>
           </div>
-        </section>
+        </Card>
       </main>
 
       <ToastStack items={toasts} />

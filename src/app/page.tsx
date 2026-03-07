@@ -11,7 +11,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { GameDialog } from "@/components/modals/GameDialog";
-import { LoadingSpinner } from "@/components/ui";
+import { Button, Card, LoadingSpinner } from "@/components/ui";
 import { PLAYER_LIMITS, DRAW_TIME_OPTIONS, VOTE_TIME_SECONDS } from "@/constants/game";
 import { db } from "@/firebase/firebase";
 import { getOrCreatePlayerId, persistPlayerContext } from "@/utils/player";
@@ -216,16 +216,16 @@ export default function HomePage() {
   return (
     <>
       <main className="min-h-screen bg-dm-bg px-4 py-8 text-dm-text-primary sm:px-6 sm:py-10">
-        <section className="mx-auto w-full max-w-4xl rounded-2xl border border-dm-accent/25 bg-dm-card/90 p-5 shadow-dm-glow sm:p-8">
+        <Card className="mx-auto w-full max-w-4xl p-5 sm:p-8" hover>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-4xl font-bold tracking-wider">DRAW MAFIA</h1>
+            <h1 className="text-4xl font-semibold tracking-tight">DRAW MAFIA</h1>
             <span className="rounded-md border border-dm-accent/40 px-3 py-1 text-xs text-dm-text-secondary">
               ONLINE LOBBY
             </span>
           </div>
-          <p className="mt-3 text-dm-text-secondary">닉네임을 입력하고 작전을 시작하세요.</p>
+          <p className="mt-3 text-dm-text-subtext font-medium">닉네임을 입력하고 작전을 시작하세요.</p>
 
-          <div className="mt-8 space-y-5 rounded-xl border border-dm-accent/20 bg-dm-bg/35 p-4 sm:p-5">
+          <Card className="mt-8 space-y-5 border-dm-primary/15 bg-dm-bg/35 p-4 sm:p-5">
             <label className="block">
               <span className="mb-2 block text-sm font-medium text-dm-text-secondary">닉네임</span>
               <input
@@ -253,25 +253,15 @@ export default function HomePage() {
             {isLoading ? <LoadingSpinner label="매치메이킹 연결 중..." /> : null}
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={createRoom}
-                disabled={isLoading}
-                className="rounded-md bg-dm-accent px-4 py-2.5 text-sm font-semibold text-dm-text-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-              >
+              <Button type="button" onClick={createRoom} disabled={isLoading} variant="primary">
                 {isLoading ? "처리 중..." : "방 생성"}
-              </button>
-              <button
-                type="button"
-                onClick={joinRoom}
-                disabled={isLoading}
-                className="rounded-md border border-dm-secondary/45 bg-dm-bg px-4 py-2.5 text-sm font-semibold text-dm-text-primary transition hover:bg-dm-card disabled:cursor-not-allowed disabled:opacity-60"
-              >
+              </Button>
+              <Button type="button" onClick={joinRoom} disabled={isLoading} variant="ghost">
                 {isLoading ? "처리 중..." : "방 입장"}
-              </button>
+              </Button>
             </div>
-          </div>
-        </section>
+          </Card>
+        </Card>
       </main>
 
       <GameDialog

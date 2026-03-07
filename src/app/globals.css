@@ -3,27 +3,61 @@
 @tailwind utilities;
 
 :root {
-  --dm-bg: 15 15 19;
-  --dm-card: 24 24 31;
-  --dm-accent: 108 99 255;
-  --dm-secondary: 255 101 132;
+  --dm-bg: 11 11 15;
+  --dm-card: 23 23 28;
+  --dm-primary: 77 163 255;
+  --dm-secondary: 138 125 255;
+  --dm-accent: 255 123 156;
   --dm-text-primary: 255 255 255;
   --dm-text-secondary: 161 161 170;
+  --dm-text-subtext: 161 161 170;
   color-scheme: dark;
 }
 
 html.light {
-  --dm-bg: 245 245 252;
+  --dm-bg: 246 247 251;
   --dm-card: 255 255 255;
-  --dm-accent: 108 99 255;
-  --dm-secondary: 255 101 132;
-  --dm-text-primary: 26 26 36;
-  --dm-text-secondary: 92 92 112;
+  --dm-primary: 49 130 246;
+  --dm-secondary: 108 99 255;
+  --dm-accent: 255 101 132;
+  --dm-text-primary: 29 29 31;
+  --dm-text-secondary: 110 110 115;
+  --dm-text-subtext: 110 110 115;
   color-scheme: light;
 }
 
 body {
   @apply bg-dm-bg text-dm-text-primary antialiased;
+}
+
+.dm-card {
+  @apply rounded-xl border bg-dm-card p-5 shadow-dm-soft transition duration-200;
+  border-color: rgb(var(--dm-primary) / 0.12);
+}
+
+.dm-card-hover {
+  @apply hover:-translate-y-[2px] hover:shadow-lg;
+}
+
+.dm-btn {
+  @apply inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+.dm-btn-primary {
+  @apply dm-btn bg-gradient-to-b from-dm-primary to-dm-secondary text-dm-text-primary hover:brightness-110;
+}
+
+.dm-btn-secondary {
+  @apply dm-btn bg-gradient-to-b from-dm-secondary to-dm-accent text-dm-text-primary hover:brightness-110;
+}
+
+.dm-btn-ghost {
+  @apply dm-btn border bg-dm-card text-dm-text-primary;
+  border-color: rgb(var(--dm-primary) / 0.35);
+}
+
+.dm-btn-ghost:hover {
+  background-color: rgb(var(--dm-primary) / 0.1);
 }
 
 .dm-dialog-overlay[data-state="open"] {

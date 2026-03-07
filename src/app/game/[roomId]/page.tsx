@@ -17,7 +17,7 @@ import {
 } from "firebase/firestore";
 import { CanvasBoard } from "@/components/canvas";
 import { GameDialog } from "@/components/modals/GameDialog";
-import { LoadingSpinner, ToastStack } from "@/components/ui";
+import { Button, Card, LoadingSpinner, ToastStack } from "@/components/ui";
 import { db } from "@/firebase/firebase";
 import type { CanvasTool, Stroke } from "@/types/canvas";
 import type { Player, Room } from "@/types/room";
@@ -337,6 +337,22 @@ export default function GamePage({ params }: GamePageProps) {
     const elapsed = Math.floor((nowMs - voteStartedAtMs) / 1000);
     return Math.max(0, (room.voteTime ?? 60) - elapsed);
   }, [nowMs, room, voteStartedAtMs]);
+
+  const drawTimerPercent = useMemo(() => {
+    if (!room || room.drawTime <= 0) {
+      return 0;
+    }
+
+    return Math.max(0, Math.min(100, (remainingSeconds / room.drawTime) * 100));
+  }, [remainingSeconds, room]);
+
+  const voteTimerPercent = useMemo(() => {
+    if (!room || (room.voteTime ?? 0) <= 0) {
+      return 0;
+    }
+
+    return Math.max(0, Math.min(100, (voteRemainingSeconds / (room.voteTime ?? 60)) * 100));
+  }, [room, voteRemainingSeconds]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -798,21 +814,22 @@ export default function GamePage({ params }: GamePageProps) {
   return (
     <>
       <main className="min-h-screen bg-dm-bg px-4 py-8 text-dm-text-primary sm:px-6 sm:py-10">
-        <section className="mx-auto w-full max-w-6xl rounded-2xl border border-dm-accent/25 bg-dm-card/90 p-4 shadow-dm-glow sm:p-8">
+        <Card className="mx-auto w-full max-w-6xl p-4 sm:p-8" hover>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-3xl font-bold tracking-wide">DRAW MAFIA</h1>
+            <h1 className="text-3xl font-semibold tracking-tight">DRAW MAFIA</h1>
             <div className="flex items-center gap-3">
               <span className="rounded-md border border-dm-accent/40 px-3 py-1 text-xs text-dm-text-secondary">
                 ROOM {resolvedRoomId || "-"}
               </span>
-              <button
+              <Button
                 type="button"
                 onClick={handleLeaveRoom}
                 disabled={leavingRoom}
-                className="rounded-md border border-dm-secondary/60 px-3 py-1 text-xs font-semibold text-dm-secondary transition hover:bg-dm-secondary/20 disabled:opacity-50"
+                variant="secondary"
+                className="px-3 py-1 text-xs"
               >
                 {leavingRoom ? "나가는 중..." : "방 나가기"}
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -829,25 +846,25 @@ export default function GamePage({ params }: GamePageProps) {
           ) : null}
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <article className="rounded-xl border border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5">
+            <Card className="border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5" hover>
               <h2 className="text-sm font-semibold text-dm-text-secondary">내 역할</h2>
               <p className="mt-2 text-xl font-bold text-dm-accent">
                 {currentPlayer?.role === "mafia" ? "마피아" : "시민"}
               </p>
               <p className="mt-3 text-xs text-dm-text-secondary">내 정보만 확인 가능합니다.</p>
-            </article>
+            </Card>
 
-            <article className="rounded-xl border border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5 lg:col-span-2">
+            <Card className="border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5 lg:col-span-2" hover>
               <h2 className="text-sm font-semibold text-dm-text-secondary">내 제시어</h2>
               <p className="mt-2 text-2xl font-bold text-dm-secondary">{visiblePrompt || "로딩 중..."}</p>
               <p className="mt-3 text-xs text-dm-text-secondary">
                 시민은 전체, 마피아는 행동/피사체 하나만 확인합니다.
               </p>
-            </article>
+            </Card>
           </div>
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <article className="rounded-xl border border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5">
+            <Card className="border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5" hover>
               <h2 className="text-sm font-semibold text-dm-text-secondary">턴 정보</h2>
               <p className="mt-2 text-sm text-dm-text-secondary">현재 턴</p>
               <p className="text-lg font-semibold text-dm-accent">
@@ -861,6 +878,12 @@ export default function GamePage({ params }: GamePageProps) {
                 <div className="mt-4 rounded-md border border-dm-accent/30 bg-dm-bg/70 p-3">
                   <p className="text-xs text-dm-text-secondary">DRAW TIMER</p>
                   <p className="mt-1 text-2xl font-bold text-dm-accent">{remainingSeconds}s</p>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-dm-card">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-dm-primary to-dm-secondary transition-all duration-500"
+                      style={{ width: `${drawTimerPercent}%` }}
+                    />
+                  </div>
                 </div>
               ) : null}
 
@@ -868,14 +891,20 @@ export default function GamePage({ params }: GamePageProps) {
                 <div className="mt-4 rounded-md border border-dm-secondary/40 bg-dm-bg/70 p-3">
                   <p className="text-xs text-dm-secondary">VOTING TIMER</p>
                   <p className="mt-1 text-2xl font-bold text-dm-secondary">{voteRemainingSeconds}s</p>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-dm-card">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-dm-secondary to-dm-accent transition-all duration-500"
+                      style={{ width: `${voteTimerPercent}%` }}
+                    />
+                  </div>
                   <p className="mt-1 text-xs text-dm-text-secondary">
                     투표 진행: {votedCount} / {eligibleVoterIds.length}
                   </p>
                 </div>
               ) : null}
-            </article>
+            </Card>
 
-            <article className="rounded-xl border border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5">
+            <Card className="border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5" hover>
               <h2 className="text-sm font-semibold text-dm-text-secondary">턴 순서</h2>
               <ol className="mt-3 space-y-2 text-sm">
                 {room?.turnOrder.map((turnPlayerId, index) => {
@@ -887,7 +916,7 @@ export default function GamePage({ params }: GamePageProps) {
                       key={turnPlayerId}
                       className={`flex items-center justify-between rounded-md border px-3 py-2 ${
                         active
-                          ? "border-dm-accent bg-dm-accent/18 text-dm-text-primary shadow-dm-glow"
+                          ? "border-dm-accent bg-dm-accent/18 text-dm-text-primary shadow-dm-glow animate-pulse"
                           : "border-dm-accent/20 bg-dm-bg text-dm-text-secondary"
                       }`}
                     >
@@ -897,7 +926,7 @@ export default function GamePage({ params }: GamePageProps) {
                   );
                 })}
               </ol>
-            </article>
+            </Card>
           </div>
 
           <div className="mt-6 rounded-xl border border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5">
@@ -980,19 +1009,19 @@ export default function GamePage({ params }: GamePageProps) {
             </div>
 
             <div className="mt-4 flex justify-end">
-              <button
+              <Button
                 type="button"
                 onClick={handleEndTurn}
                 disabled={!isMyTurn || endingTurn || room?.status !== "playing"}
-                className="rounded-md bg-dm-accent px-4 py-2 text-sm font-semibold text-dm-text-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                className="px-4 py-2 text-sm"
               >
                 {endingTurn ? "처리 중..." : "턴 종료"}
-              </button>
+              </Button>
             </div>
           </div>
 
           {room?.status === "voting" ? (
-            <div className="mt-6 rounded-xl border border-dm-secondary/40 bg-dm-bg/45 p-4 sm:p-5">
+            <Card className="mt-6 border-dm-secondary/40 bg-dm-bg/45 p-4 sm:p-5" hover>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-sm font-semibold text-dm-secondary">VOTING PHASE</h2>
                 <p className="text-xs text-dm-text-secondary">
@@ -1006,26 +1035,27 @@ export default function GamePage({ params }: GamePageProps) {
 
               <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {alivePlayers.map((player) => (
-                  <button
+                  <Button
                     key={player.id}
                     type="button"
+                    variant="ghost"
                     onClick={() => handleCastVote(player.id)}
                     disabled={!isAlive || Boolean(myVote) || submittingVote}
-                    className="flex items-center justify-between rounded-md border border-dm-secondary/40 bg-dm-bg px-3 py-2 text-sm text-dm-text-primary transition hover:bg-dm-secondary/15 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex items-center justify-between px-3 py-2 text-sm"
                   >
                     <span>{player.nickname}</span>
                     <span className="text-xs text-dm-secondary">투표</span>
-                  </button>
+                  </Button>
                 ))}
 
-                <button
+                <Button
                   type="button"
                   onClick={() => handleCastVote(VOTE_SKIP_TARGET)}
                   disabled={!isAlive || Boolean(myVote) || submittingVote}
-                  className="rounded-md border border-dm-accent/40 bg-dm-accent/15 px-3 py-2 text-sm font-semibold text-dm-text-primary transition hover:bg-dm-accent/25 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="px-3 py-2 text-sm"
                 >
                   넘어가기 투표
-                </button>
+                </Button>
               </div>
 
               <div className="mt-4 rounded-md border border-dm-accent/20 bg-dm-bg/70 p-3 text-xs text-dm-text-secondary">
@@ -1033,7 +1063,7 @@ export default function GamePage({ params }: GamePageProps) {
                   ? `현재 최다 득표: ${players.find((player) => player.id === voteResult.topTargetId)?.nickname ?? "알 수 없음"} (${voteResult.topCount}표)`
                   : "현재 집계: 동률 또는 넘어가기 우세"}
               </div>
-            </div>
+            </Card>
           ) : null}
 
           {room?.status === "result" ? (
@@ -1100,25 +1130,26 @@ export default function GamePage({ params }: GamePageProps) {
               </p>
               <p className="mt-1 text-sm text-dm-text-secondary">{room.resultMessage ?? "게임 종료"}</p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <button
+                <Button
                   type="button"
                   onClick={() => router.push("/")}
-                  className="rounded-md bg-dm-accent px-4 py-2 text-sm font-semibold text-dm-text-primary transition hover:brightness-110"
+                  className="px-4 py-2 text-sm"
                 >
                   다시 시작
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   onClick={handleLeaveRoom}
                   disabled={leavingRoom}
-                  className="rounded-md border border-dm-secondary/60 px-4 py-2 text-sm font-semibold text-dm-secondary transition hover:bg-dm-secondary/20 disabled:opacity-60"
+                  variant="ghost"
+                  className="px-4 py-2 text-sm"
                 >
                   방 나가기
-                </button>
+                </Button>
               </div>
             </div>
           ) : null}
-        </section>
+        </Card>
       </main>
 
       <ToastStack items={toasts} />
