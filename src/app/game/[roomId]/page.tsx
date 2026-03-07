@@ -917,6 +917,17 @@ export default function GamePage({ params }: GamePageProps) {
     [players, room?.eliminatedPlayerId]
   );
 
+  const winnerNicknames = useMemo(() => {
+    if (!room?.winner) {
+      return [] as string[];
+    }
+
+    const winnerRole = room.winner === "mafia" ? "mafia" : "citizen";
+    return players
+      .filter((player) => player.role === winnerRole)
+      .map((player) => player.nickname);
+  }, [players, room?.winner]);
+
   const stageGuide = useMemo(
     () => [
       { key: "playing", label: "그림 그리기" },
@@ -1513,6 +1524,9 @@ export default function GamePage({ params }: GamePageProps) {
               <h2 className="text-xl font-bold text-dm-secondary">GAME END</h2>
               <p className="mt-2 text-sm text-dm-text-primary">
                 승리 팀: {room.winner === "mafia" ? "마피아" : "시민"}
+              </p>
+              <p className="mt-1 text-sm text-dm-accent">
+                승리 플레이어: {winnerNicknames.length > 0 ? winnerNicknames.join(", ") : "확인 불가"}
               </p>
               <p className="mt-1 text-sm text-dm-text-secondary">{room.resultMessage ?? "게임 종료"}</p>
               <div className="mt-4 flex flex-wrap gap-2">
