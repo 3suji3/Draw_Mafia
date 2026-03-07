@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   collection,
@@ -9,6 +9,8 @@ import {
   onSnapshot,
   orderBy,
   query,
+  serverTimestamp,
+  setDoc,
   updateDoc,
   writeBatch,
 } from "firebase/firestore";
@@ -17,7 +19,8 @@ import { PROMPT_POOL } from "@/constants/prompts";
 import { PLAYER_LIMITS, DRAW_TIME_OPTIONS } from "@/constants/game";
 import { db } from "@/firebase/firebase";
 import type { Player, Room } from "@/types/room";
-import { getOrCreatePlayerId, getStoredRoomId } from "@/utils/player";
+import { leaveRoomAndHandleHost, validateRoomState } from "@/utils/roomException";
+import { getOrCreatePlayerId, getStoredNickname, getStoredRoomId } from "@/utils/player";
 
 type RoomPageProps = {
   params: Promise<{ roomId: string }>;
@@ -56,7 +59,11 @@ export default function RoomPage({ params }: RoomPageProps) {
   const [loading, setLoading] = useState(true);
   const [updatingDrawTime, setUpdatingDrawTime] = useState(false);
   const [startingGame, setStartingGame] = useState(false);
+  const [recoveringPlayer, setRecoveringPlayer] = useState(false);
+  const [leavingRoom, setLeavingRoom] = useState(false);
+  const [networkDelayed, setNetworkDelayed] = useState(false);
   const [dialog, setDialog] = useState<DialogState>(INITIAL_DIALOG);
+  const recoveryAttemptedRef = useRef(false);
 
   const openDialog = (title: string, description: string) => {
     setDialog({ open: true, title, description });
@@ -96,14 +103,34 @@ export default function RoomPage({ params }: RoomPageProps) {
         return;
       }
 
-      setRoom(snapshot.data() as Room);
+      const roomData = snapshot.data() as Room;
+      const roomError = validateRoomState(roomData);
+
+      if (roomError) {
+        openDialog("방 상태 오류", `${roomError} 홈으로 이동합니다.`);
+        router.push("/");
+        setLoading(false);
+        return;
+      }
+
+      setRoom(roomData);
       setLoading(false);
+      setNetworkDelayed(false);
+    }, () => {
+      openDialog("연결 지연", "방 정보를 불러오는 중 문제가 발생했습니다.");
+      setLoading(false);
+      setNetworkDelayed(true);
     });
 
     const unsubscribePlayers = onSnapshot(playersRef, (snapshot) => {
       const nextPlayers = snapshot.docs.map((item) => item.data() as Player);
       setPlayers(nextPlayers);
       setLoading(false);
+      setNetworkDelayed(false);
+    }, () => {
+      openDialog("연결 지연", "참가자 목록을 불러오는 중 문제가 발생했습니다.");
+      setLoading(false);
+      setNetworkDelayed(true);
     });
 
     return () => {
@@ -112,8 +139,24 @@ export default function RoomPage({ params }: RoomPageProps) {
     };
   }, [resolvedRoomId]);
 
+  useEffect(() => {
+    if (!loading) {
+      setNetworkDelayed(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setNetworkDelayed(true);
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [loading]);
+
   const playerId = useMemo(() => getOrCreatePlayerId(), []);
   const joinedRoomId = useMemo(() => getStoredRoomId(), []);
+  const storedNickname = useMemo(() => getStoredNickname(), []);
 
   const currentPlayer = useMemo(
     () => players.find((player) => player.id === playerId),
@@ -123,6 +166,63 @@ export default function RoomPage({ params }: RoomPageProps) {
   const isHost = Boolean(currentPlayer?.isHost && room?.hostId === currentPlayer.id);
   const totalPlayers = players.length;
   const canStartCount = totalPlayers === PLAYER_LIMITS.testMin || totalPlayers >= PLAYER_LIMITS.min;
+
+  useEffect(() => {
+    if (!room || !resolvedRoomId) {
+      return;
+    }
+
+    if (room.status !== "waiting") {
+      router.push(`/game/${resolvedRoomId}`);
+    }
+  }, [resolvedRoomId, room, router]);
+
+  useEffect(() => {
+    if (!room || room.status !== "waiting" || currentPlayer || recoveringPlayer) {
+      return;
+    }
+
+    if (resolvedRoomId !== joinedRoomId || !storedNickname || recoveryAttemptedRef.current) {
+      return;
+    }
+
+    recoveryAttemptedRef.current = true;
+    setRecoveringPlayer(true);
+
+    const hasDuplicateNickname = players.some(
+      (player) => player.nickname.toLowerCase() === storedNickname.toLowerCase()
+    );
+
+    if (hasDuplicateNickname) {
+      openDialog("복구 실패", "동일 닉네임이 이미 존재해 자동 복구할 수 없습니다.");
+      setRecoveringPlayer(false);
+      return;
+    }
+
+    void setDoc(doc(db, "rooms", resolvedRoomId, "players", playerId), {
+      id: playerId,
+      nickname: storedNickname,
+      role: "citizen",
+      alive: true,
+      isHost: false,
+      joinedAt: serverTimestamp(),
+    } as Player)
+      .catch(() => {
+        openDialog("복구 실패", "새로고침 복구 중 오류가 발생했습니다.");
+      })
+      .finally(() => {
+        setRecoveringPlayer(false);
+      });
+  }, [
+    currentPlayer,
+    joinedRoomId,
+    playerId,
+    players,
+    recoveringPlayer,
+    resolvedRoomId,
+    room,
+    storedNickname,
+  ]);
 
   const handleDrawTimeChange = async (nextDrawTime: number) => {
     if (!room || !isHost || room.drawTime === nextDrawTime || updatingDrawTime) {
@@ -216,6 +316,26 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
   };
 
+  const handleLeaveRoom = async () => {
+    if (!resolvedRoomId || leavingRoom) {
+      return;
+    }
+
+    setLeavingRoom(true);
+
+    try {
+      await leaveRoomAndHandleHost({
+        roomId: resolvedRoomId,
+        playerId,
+      });
+      router.push("/");
+    } catch {
+      openDialog("이탈 실패", "방 이탈 처리 중 오류가 발생했습니다.");
+    } finally {
+      setLeavingRoom(false);
+    }
+  };
+
   return (
     <>
       <main className="min-h-screen bg-slate-950 px-6 py-10 text-slate-100">
@@ -243,6 +363,14 @@ export default function RoomPage({ params }: RoomPageProps) {
             <p className="mt-3 text-sm text-amber-300">
               저장된 최근 방 코드({joinedRoomId})와 현재 방 코드가 다릅니다.
             </p>
+          ) : null}
+
+          {networkDelayed ? (
+            <p className="mt-3 text-sm text-amber-300">네트워크 지연이 감지되었습니다. 연결 복구를 시도 중입니다.</p>
+          ) : null}
+
+          {recoveringPlayer ? (
+            <p className="mt-3 text-sm text-cyan-300">새로고침 복구를 진행 중입니다...</p>
           ) : null}
 
           <div className="mt-8">
@@ -307,13 +435,23 @@ export default function RoomPage({ params }: RoomPageProps) {
           </div>
 
           <div className="mt-6">
-            <button
-              type="button"
-              onClick={() => router.push("/")}
-              className="text-sm text-slate-400 underline underline-offset-4"
-            >
-              홈으로 돌아가기
-            </button>
+            <div className="flex items-center gap-4">
+              <button
+                type="button"
+                onClick={() => router.push("/")}
+                className="text-sm text-slate-400 underline underline-offset-4"
+              >
+                홈으로 돌아가기
+              </button>
+              <button
+                type="button"
+                onClick={handleLeaveRoom}
+                disabled={leavingRoom}
+                className="text-sm text-rose-300 underline underline-offset-4 disabled:opacity-50"
+              >
+                {leavingRoom ? "이탈 처리 중..." : "방 나가기"}
+              </button>
+            </div>
           </div>
         </section>
       </main>

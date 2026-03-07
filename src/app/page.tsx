@@ -164,6 +164,11 @@ export default function HomePage() {
 
       const room = roomSnap.data() as Room;
 
+      if (room.status === "ended") {
+        openDialog("입장 불가", "이미 종료된 게임입니다. 새 방을 생성해주세요.");
+        return;
+      }
+
       if (room.status !== "waiting") {
         openDialog("입장 불가", "이미 게임이 진행 중인 방입니다.");
         return;

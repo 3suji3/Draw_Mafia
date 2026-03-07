@@ -20,6 +20,7 @@ import { GameDialog } from "@/components/modals/GameDialog";
 import { db } from "@/firebase/firebase";
 import type { CanvasTool, Stroke } from "@/types/canvas";
 import type { Player, Room } from "@/types/room";
+import { leaveRoomAndHandleHost, validateRoomState } from "@/utils/roomException";
 import { getOrCreatePlayerId } from "@/utils/player";
 
 type GamePageProps = {
@@ -101,6 +102,8 @@ export default function GamePage({ params }: GamePageProps) {
   const [continuingRound, setContinuingRound] = useState(false);
   const [submittingGuess, setSubmittingGuess] = useState(false);
   const [mafiaGuessWord, setMafiaGuessWord] = useState("");
+  const [leavingRoom, setLeavingRoom] = useState(false);
+  const [networkDelayed, setNetworkDelayed] = useState(false);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [turnStartedAtMs, setTurnStartedAtMs] = useState<number | null>(null);
@@ -147,12 +150,30 @@ export default function GamePage({ params }: GamePageProps) {
         return;
       }
 
-      setRoom(snapshot.data() as Room);
+      const roomData = snapshot.data() as Room;
+      const roomError = validateRoomState(roomData);
+
+      if (roomError) {
+        setVoteResultDialog({
+          open: true,
+          message: `방 상태 오류: ${roomError}`,
+        });
+        router.push("/");
+        return;
+      }
+
+      setRoom(roomData);
+      setNetworkDelayed(false);
+    }, () => {
+      setNetworkDelayed(true);
     });
 
     const unsubscribePlayers = onSnapshot(playersRef, (snapshot) => {
       const nextPlayers = snapshot.docs.map((item) => item.data() as Player);
       setPlayers(nextPlayers);
+      setNetworkDelayed(false);
+    }, () => {
+      setNetworkDelayed(true);
     });
 
     const unsubscribeDrawings = onSnapshot(drawingsRef, (snapshot) => {
@@ -165,11 +186,17 @@ export default function GamePage({ params }: GamePageProps) {
       });
 
       setStrokes(nextStrokes);
+      setNetworkDelayed(false);
+    }, () => {
+      setNetworkDelayed(true);
     });
 
     const unsubscribeVotes = onSnapshot(votesRef, (snapshot) => {
       const nextVotes = snapshot.docs.map((item) => item.data() as Vote);
       setVotes(nextVotes);
+      setNetworkDelayed(false);
+    }, () => {
+      setNetworkDelayed(true);
     });
 
     return () => {
@@ -179,6 +206,20 @@ export default function GamePage({ params }: GamePageProps) {
       unsubscribeVotes();
     };
   }, [resolvedRoomId, router]);
+
+  useEffect(() => {
+    if (!resolvedRoomId || room) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setNetworkDelayed(true);
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [resolvedRoomId, room]);
 
   const playerId = useMemo(() => getOrCreatePlayerId(), []);
   const currentPlayer = useMemo(
@@ -612,6 +653,29 @@ export default function GamePage({ params }: GamePageProps) {
     }
   };
 
+  const handleLeaveRoom = async () => {
+    if (!resolvedRoomId || leavingRoom) {
+      return;
+    }
+
+    setLeavingRoom(true);
+
+    try {
+      await leaveRoomAndHandleHost({
+        roomId: resolvedRoomId,
+        playerId,
+      });
+      router.push("/");
+    } catch {
+      setVoteResultDialog({
+        open: true,
+        message: "방 이탈 처리 중 오류가 발생했습니다.",
+      });
+    } finally {
+      setLeavingRoom(false);
+    }
+  };
+
   useEffect(() => {
     if (!room || room.status !== "playing" || !isHost) {
       return;
@@ -674,16 +738,46 @@ export default function GamePage({ params }: GamePageProps) {
     [players, room?.eliminatedPlayerId]
   );
 
+  useEffect(() => {
+    if (!room || room.status === "ended" || currentPlayer || !resolvedRoomId) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      router.push(`/room/${resolvedRoomId}`);
+    }, 3000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [currentPlayer, resolvedRoomId, room, router]);
+
   return (
     <>
       <main className="min-h-screen bg-slate-950 px-6 py-10 text-slate-100">
         <section className="mx-auto w-full max-w-6xl rounded-2xl border border-slate-700 bg-slate-900/90 p-8 shadow-2xl">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h1 className="text-3xl font-bold tracking-wide">DRAW MAFIA</h1>
-            <span className="rounded-md border border-slate-600 px-3 py-1 text-xs text-slate-300">
-              ROOM {resolvedRoomId || "-"}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="rounded-md border border-slate-600 px-3 py-1 text-xs text-slate-300">
+                ROOM {resolvedRoomId || "-"}
+              </span>
+              <button
+                type="button"
+                onClick={handleLeaveRoom}
+                disabled={leavingRoom}
+                className="rounded-md border border-rose-600 px-3 py-1 text-xs font-semibold text-rose-200 transition hover:bg-rose-700/30 disabled:opacity-50"
+              >
+                {leavingRoom ? "나가는 중..." : "방 나가기"}
+              </button>
+            </div>
           </div>
+
+          {networkDelayed ? (
+            <p className="mt-3 text-sm text-amber-300">
+              네트워크 지연이 감지되었습니다. 실시간 상태 동기화를 재시도 중입니다.
+            </p>
+          ) : null}
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
             <article className="rounded-xl border border-slate-700 bg-slate-800/70 p-5">
