@@ -357,7 +357,9 @@ export default function GamePage({ params }: GamePageProps) {
   );
   const isHost = Boolean(currentPlayer?.isHost && room?.hostId === currentPlayer?.id);
   const isAlive = Boolean(currentPlayer?.alive);
-  const currentGameSession = room?.gameSession ?? 0;
+  const currentGameSession = Number(
+    (room as (Room & { gameSession?: number }) | null)?.gameSession ?? 0
+  );
 
   const connectionLabel = !isOnline
     ? "오프라인"

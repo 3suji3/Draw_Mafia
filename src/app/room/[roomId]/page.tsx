@@ -405,11 +405,13 @@ export default function RoomPage({ params }: RoomPageProps) {
       const turnOrder = shuffle(currentPlayers.map((player) => player.id));
       const mafiaId = turnOrder[Math.floor(Math.random() * turnOrder.length)];
       const selectedPrompt = PROMPT_POOL[Math.floor(Math.random() * PROMPT_POOL.length)];
+      const roomGameSession = Number((room as Room & { gameSession?: number }).gameSession ?? 0);
 
       const batch = writeBatch(db);
 
       batch.update(roomRef, {
         status: "playing",
+        gameSession: roomGameSession + 1,
         prompt: selectedPrompt,
         mafiaId,
         turnOrder,
