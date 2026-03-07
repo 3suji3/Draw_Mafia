@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   collection,
   doc,
@@ -39,6 +39,9 @@ const INITIAL_DIALOG: DialogState = {
   description: "",
 };
 
+const TEST_BOT_COUNT = 3;
+const TEST_BOT_PREFIX = "bot";
+
 function shuffle<T>(items: T[]): T[] {
   const next = [...items];
 
@@ -54,6 +57,7 @@ function shuffle<T>(items: T[]): T[] {
 
 export default function RoomPage({ params }: RoomPageProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [resolvedRoomId, setResolvedRoomId] = useState("");
   const [room, setRoom] = useState<Room | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -63,10 +67,12 @@ export default function RoomPage({ params }: RoomPageProps) {
   const [recoveringPlayer, setRecoveringPlayer] = useState(false);
   const [leavingRoom, setLeavingRoom] = useState(false);
   const [networkDelayed, setNetworkDelayed] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
   const [toasts, setToasts] = useState<Array<{ id: string; message: string }>>([]);
   const [dialog, setDialog] = useState<DialogState>(INITIAL_DIALOG);
   const recoveryAttemptedRef = useRef(false);
   const prevPlayerIdsRef = useRef<string[]>([]);
+  const creatingBotsRef = useRef(false);
 
   const openDialog = (title: string, description: string) => {
     setDialog({ open: true, title, description });
@@ -79,6 +85,21 @@ export default function RoomPage({ params }: RoomPageProps) {
       setToasts((prev) => prev.filter((toast) => toast.id !== id));
     }, 2400);
   };
+
+  useEffect(() => {
+    const syncOnlineState = () => {
+      setIsOnline(window.navigator.onLine);
+    };
+
+    syncOnlineState();
+    window.addEventListener("online", syncOnlineState);
+    window.addEventListener("offline", syncOnlineState);
+
+    return () => {
+      window.removeEventListener("online", syncOnlineState);
+      window.removeEventListener("offline", syncOnlineState);
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -168,6 +189,19 @@ export default function RoomPage({ params }: RoomPageProps) {
   const playerId = useMemo(() => getOrCreatePlayerId(), []);
   const joinedRoomId = useMemo(() => getStoredRoomId(), []);
   const storedNickname = useMemo(() => getStoredNickname(), []);
+  const isTestMode = useMemo(() => {
+    if (process.env.NODE_ENV !== "development") {
+      return false;
+    }
+
+    const raw = searchParams.get("test");
+
+    if (raw === null) {
+      return true;
+    }
+
+    return raw === "true";
+  }, [searchParams]);
 
   const currentPlayer = useMemo(
     () => players.find((player) => player.id === playerId),
@@ -176,7 +210,21 @@ export default function RoomPage({ params }: RoomPageProps) {
 
   const isHost = Boolean(currentPlayer?.isHost && room?.hostId === currentPlayer.id);
   const totalPlayers = players.length;
-  const canStartCount = totalPlayers === PLAYER_LIMITS.testMin || totalPlayers >= PLAYER_LIMITS.min;
+  const canStartCount =
+    totalPlayers >= PLAYER_LIMITS.min ||
+    (isTestMode && totalPlayers === PLAYER_LIMITS.testMin);
+
+  const connectionLabel = !isOnline
+    ? "오프라인"
+    : networkDelayed
+      ? "동기화 중"
+      : "연결됨";
+
+  const connectionClassName = !isOnline
+    ? "border-dm-secondary/50 text-dm-secondary"
+    : networkDelayed
+      ? "border-dm-accent/50 text-dm-accent animate-pulse"
+      : "border-dm-primary/45 text-dm-primary";
 
   useEffect(() => {
     const currentIds = players.map((player) => player.id);
@@ -203,6 +251,47 @@ export default function RoomPage({ params }: RoomPageProps) {
       router.push(`/game/${resolvedRoomId}`);
     }
   }, [resolvedRoomId, room, router]);
+
+  useEffect(() => {
+    if (!isTestMode || !room || room.status !== "waiting" || !isHost || creatingBotsRef.current) {
+      return;
+    }
+
+    const existingIds = new Set(players.map((player) => player.id));
+    const missingBotIds = Array.from({ length: TEST_BOT_COUNT }, (_, index) => `${TEST_BOT_PREFIX}${index + 1}`)
+      .filter((botId) => !existingIds.has(botId));
+
+    if (missingBotIds.length === 0) {
+      return;
+    }
+
+    creatingBotsRef.current = true;
+
+    void Promise.all(
+      missingBotIds.map((botId, index) => {
+        const nickname = `bot${Number(botId.replace(TEST_BOT_PREFIX, "")) || index + 1}`;
+
+        return setDoc(doc(db, "rooms", resolvedRoomId, "players", botId), {
+          id: botId,
+          nickname,
+          role: "citizen",
+          alive: true,
+          isHost: false,
+          isBot: true,
+          joinedAt: serverTimestamp(),
+        } as Player);
+      })
+    )
+      .then(() => {
+        pushToast("테스트 봇이 자동으로 배치되었습니다.");
+      })
+      .catch(() => {
+        openDialog("테스트 모드 오류", "더미 플레이어 생성에 실패했습니다.");
+      })
+      .finally(() => {
+        creatingBotsRef.current = false;
+      });
+  }, [isHost, isTestMode, players, resolvedRoomId, room]);
 
   useEffect(() => {
     if (!room || room.status !== "waiting" || currentPlayer || recoveringPlayer) {
@@ -304,7 +393,7 @@ export default function RoomPage({ params }: RoomPageProps) {
         return;
       }
 
-      if (!(currentPlayers.length === PLAYER_LIMITS.testMin || currentPlayers.length >= PLAYER_LIMITS.min)) {
+      if (!(currentPlayers.length >= PLAYER_LIMITS.min || (isTestMode && currentPlayers.length === PLAYER_LIMITS.testMin))) {
         openDialog("시작 불가", "시작 인원 조건을 만족하지 않습니다.");
         return;
       }
@@ -367,11 +456,23 @@ export default function RoomPage({ params }: RoomPageProps) {
     <>
       <main className="min-h-screen bg-dm-bg px-4 py-8 text-dm-text-primary sm:px-6 sm:py-10">
         <Card className="mx-auto w-full max-w-4xl p-5 sm:p-8" hover>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h1 className="text-3xl font-semibold tracking-tight">LOBBY</h1>
-            <span className="rounded-md border border-dm-accent/40 px-3 py-1 text-xs text-dm-text-secondary">
-              ROOM {resolvedRoomId || "-"}
-            </span>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-semibold tracking-tight">LOBBY</h1>
+              {isTestMode ? (
+                <span className="rounded-full border border-dm-secondary/45 bg-dm-secondary/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-dm-secondary">
+                  Test Mode
+                </span>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${connectionClassName}`}>
+                {connectionLabel}
+              </span>
+              <span className="rounded-md border border-dm-accent/40 px-3 py-1 text-xs text-dm-text-secondary">
+                ROOM {resolvedRoomId || "-"}
+              </span>
+            </div>
           </div>
 
           <Card className="mt-6 grid grid-cols-1 gap-3 border-dm-accent/20 bg-dm-bg/35 p-4 text-sm sm:grid-cols-3">
@@ -414,10 +515,22 @@ export default function RoomPage({ params }: RoomPageProps) {
                       : "border-dm-accent/20 bg-dm-bg/50"
                   }`}
                 >
-                  <span className="font-medium text-dm-text-primary">{player.nickname}</span>
-                  <span className="text-xs text-dm-text-secondary">
-                    {player.isHost ? "방장" : "참가자"}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-dm-text-primary">{player.nickname}</span>
+                    {player.id === playerId ? (
+                      <span className="rounded-full border border-dm-primary/35 px-2 py-0.5 text-[10px] text-dm-primary">
+                        나
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-dm-text-secondary">
+                    {player.isBot ? (
+                      <span className="rounded-full border border-dm-secondary/40 px-2 py-0.5 text-dm-secondary">
+                        BOT
+                      </span>
+                    ) : null}
+                    <span>{player.isHost ? "방장" : "참가자"}</span>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -452,7 +565,7 @@ export default function RoomPage({ params }: RoomPageProps) {
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-dm-text-secondary">
-              시작 조건: {PLAYER_LIMITS.min}명 이상, 테스트 모드 {PLAYER_LIMITS.testMin}명 허용
+              시작 조건: 기본 {PLAYER_LIMITS.min}명 이상 / 테스트 모드 {PLAYER_LIMITS.testMin}명 허용
             </p>
             <Button
               type="button"

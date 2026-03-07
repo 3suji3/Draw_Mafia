@@ -32,5 +32,6 @@ export type Player = {
   role: PlayerRole;
   alive: boolean;
   isHost: boolean;
+  isBot?: boolean;
   joinedAt: unknown;
 };

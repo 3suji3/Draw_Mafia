@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   addDoc,
   collection,
@@ -18,6 +18,7 @@ import {
 import { CanvasBoard } from "@/components/canvas";
 import { GameDialog } from "@/components/modals/GameDialog";
 import { Button, Card, LoadingSpinner, ToastStack } from "@/components/ui";
+import { PROMPT_POOL } from "@/constants/prompts";
 import { db } from "@/firebase/firebase";
 import type { CanvasTool, Stroke } from "@/types/canvas";
 import type { Player, Room } from "@/types/room";
@@ -44,6 +45,8 @@ type VoteResult = {
 const TIMER_STORAGE_PREFIX = "draw_mafia_turn_started";
 const VOTE_TIMER_STORAGE_PREFIX = "draw_mafia_vote_started";
 const VOTE_SKIP_TARGET = "skip";
+const SOUND_STORAGE_KEY = "draw_mafia_sound_enabled";
+const TEST_BOT_PREFIX = "bot";
 
 function getTurnTimerKey(roomId: string, round: number, turnIndex: number): string {
   return `${TIMER_STORAGE_PREFIX}_${roomId}_${round}_${turnIndex}`;
@@ -61,6 +64,19 @@ function isMafiaHintAction(roomId: string, mafiaId: string, round: number): bool
 
 function normalizeText(text: string): string {
   return text.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function shuffle<T>(items: T[]): T[] {
+  const next = [...items];
+
+  for (let index = next.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    const temp = next[index];
+    next[index] = next[randomIndex];
+    next[randomIndex] = temp;
+  }
+
+  return next;
 }
 
 async function clearRoomSubcollection(roomId: string, subcollection: "drawings" | "votes") {
@@ -81,6 +97,7 @@ async function clearRoomSubcollection(roomId: string, subcollection: "drawings" 
 
 export default function GamePage({ params }: GamePageProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [resolvedRoomId, setResolvedRoomId] = useState("");
   const [room, setRoom] = useState<Room | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -104,7 +121,10 @@ export default function GamePage({ params }: GamePageProps) {
   const [submittingGuess, setSubmittingGuess] = useState(false);
   const [mafiaGuessWord, setMafiaGuessWord] = useState("");
   const [leavingRoom, setLeavingRoom] = useState(false);
+  const [restartingGame, setRestartingGame] = useState(false);
   const [networkDelayed, setNetworkDelayed] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const [toasts, setToasts] = useState<Array<{ id: string; message: string }>>([]);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -115,6 +135,23 @@ export default function GamePage({ params }: GamePageProps) {
   const autoFinalizedVoteKeyRef = useRef<string>("");
   const previousTurnKeyRef = useRef<string>("");
   const previousVoteCountRef = useRef(0);
+  const botAutoTurnKeyRef = useRef<string>("");
+  const previousEliminatedRef = useRef<string | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  const isTestMode = useMemo(() => {
+    if (process.env.NODE_ENV !== "development") {
+      return false;
+    }
+
+    const raw = searchParams.get("test");
+
+    if (raw === null) {
+      return true;
+    }
+
+    return raw === "true";
+  }, [searchParams]);
 
   const pushToast = (message: string) => {
     const id = crypto.randomUUID();
@@ -123,6 +160,76 @@ export default function GamePage({ params }: GamePageProps) {
       setToasts((prev) => prev.filter((toast) => toast.id !== id));
     }, 2200);
   };
+
+  const playSound = (type: "turn" | "vote" | "elimination") => {
+    if (!soundEnabled || typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const ContextClass = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+
+      if (!ContextClass) {
+        return;
+      }
+
+      const context = audioContextRef.current ?? new ContextClass();
+      audioContextRef.current = context;
+
+      if (context.state === "suspended") {
+        void context.resume();
+      }
+
+      const oscillator = context.createOscillator();
+      const gainNode = context.createGain();
+      const now = context.currentTime;
+      const tones = {
+        turn: 510,
+        vote: 390,
+        elimination: 240,
+      };
+
+      oscillator.type = "triangle";
+      oscillator.frequency.setValueAtTime(tones[type], now);
+      gainNode.gain.setValueAtTime(0.0001, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.07, now + 0.02);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+
+      oscillator.connect(gainNode);
+      gainNode.connect(context.destination);
+      oscillator.start(now);
+      oscillator.stop(now + 0.22);
+    } catch {
+      return;
+    }
+  };
+
+  useEffect(() => {
+    const syncOnlineState = () => {
+      setIsOnline(window.navigator.onLine);
+    };
+
+    syncOnlineState();
+    window.addEventListener("online", syncOnlineState);
+    window.addEventListener("offline", syncOnlineState);
+
+    return () => {
+      window.removeEventListener("online", syncOnlineState);
+      window.removeEventListener("offline", syncOnlineState);
+    };
+  }, []);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(SOUND_STORAGE_KEY);
+
+    if (saved === "false") {
+      setSoundEnabled(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(SOUND_STORAGE_KEY, String(soundEnabled));
+  }, [soundEnabled]);
 
   useEffect(() => {
     let mounted = true;
@@ -253,6 +360,18 @@ export default function GamePage({ params }: GamePageProps) {
   );
   const isHost = Boolean(currentPlayer?.isHost && room?.hostId === currentPlayer?.id);
   const isAlive = Boolean(currentPlayer?.alive);
+
+  const connectionLabel = !isOnline
+    ? "오프라인"
+    : networkDelayed
+      ? "동기화 중"
+      : "연결됨";
+
+  const connectionClassName = !isOnline
+    ? "border-dm-secondary/50 text-dm-secondary"
+    : networkDelayed
+      ? "border-dm-accent/50 text-dm-accent animate-pulse"
+      : "border-dm-primary/45 text-dm-primary";
 
   const alivePlayers = useMemo(() => players.filter((player) => player.alive), [players]);
   const eligibleVoterIds = useMemo(() => alivePlayers.map((player) => player.id), [alivePlayers]);
@@ -766,6 +885,24 @@ export default function GamePage({ params }: GamePageProps) {
     [players, room?.eliminatedPlayerId]
   );
 
+  const stageGuide = useMemo(
+    () => [
+      { key: "playing", label: "그림 그리기" },
+      { key: "voting", label: "투표" },
+      { key: "result", label: "결과 공개" },
+      { key: "ended", label: "종료" },
+    ],
+    []
+  );
+
+  const aliveBotPlayers = useMemo(
+    () =>
+      alivePlayers.filter(
+        (player) => player.isBot || player.id.startsWith(TEST_BOT_PREFIX)
+      ),
+    [alivePlayers]
+  );
+
   useEffect(() => {
     if (!room || room.status === "ended" || currentPlayer || !resolvedRoomId) {
       return;
@@ -794,6 +931,7 @@ export default function GamePage({ params }: GamePageProps) {
 
     if (previousTurnKeyRef.current !== turnKey && room.status === "playing") {
       pushToast("다음 턴이 시작되었습니다.");
+      playSound("turn");
     }
 
     previousTurnKeyRef.current = turnKey;
@@ -811,13 +949,170 @@ export default function GamePage({ params }: GamePageProps) {
     previousVoteCountRef.current = votedCount;
   }, [votedCount]);
 
+  useEffect(() => {
+    if (voteResultDialog.open) {
+      playSound("vote");
+    }
+  }, [voteResultDialog.open]);
+
+  useEffect(() => {
+    const currentEliminated = room?.eliminatedPlayerId ?? null;
+
+    if (currentEliminated && currentEliminated !== previousEliminatedRef.current) {
+      playSound("elimination");
+    }
+
+    previousEliminatedRef.current = currentEliminated;
+  }, [room?.eliminatedPlayerId]);
+
+  useEffect(() => {
+    if (!isTestMode || !isHost || !room || room.status !== "playing" || !currentTurnPlayer) {
+      return;
+    }
+
+    const isBotTurn = currentTurnPlayer.isBot || currentTurnPlayer.id.startsWith(TEST_BOT_PREFIX);
+
+    if (!isBotTurn) {
+      return;
+    }
+
+    const botTurnKey = `${room.round}-${room.turnIndex}`;
+
+    if (botAutoTurnKeyRef.current === botTurnKey || endingTurn) {
+      return;
+    }
+
+    botAutoTurnKeyRef.current = botTurnKey;
+
+    const timeoutId = window.setTimeout(() => {
+      void advanceTurn().catch(() => {
+        botAutoTurnKeyRef.current = "";
+      });
+    }, 1200);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [currentTurnPlayer, endingTurn, isHost, isTestMode, room]);
+
+  useEffect(() => {
+    if (!isTestMode || !isHost || !room || room.status !== "voting" || aliveBotPlayers.length === 0) {
+      return;
+    }
+
+    const alreadyVoted = new Set(votes.map((vote) => vote.voterId));
+    const candidateTargets = [...alivePlayers.map((player) => player.id), VOTE_SKIP_TARGET];
+    const pendingBots = aliveBotPlayers.filter((player) => !alreadyVoted.has(player.id));
+
+    if (pendingBots.length === 0) {
+      return;
+    }
+
+    void Promise.all(
+      pendingBots.map((botPlayer) => {
+        const randomTarget =
+          candidateTargets[Math.floor(Math.random() * candidateTargets.length)] ?? VOTE_SKIP_TARGET;
+
+        return setDoc(doc(db, "rooms", resolvedRoomId, "votes", botPlayer.id), {
+          voterId: botPlayer.id,
+          targetId: randomTarget,
+        });
+      })
+    );
+  }, [aliveBotPlayers, alivePlayers, isHost, isTestMode, resolvedRoomId, room, votes]);
+
+  const handleRestartGame = async () => {
+    if (!room || room.status !== "ended" || !isHost || restartingGame) {
+      return;
+    }
+
+    setRestartingGame(true);
+
+    try {
+      await clearRoomSubcollection(resolvedRoomId, "votes");
+      await clearRoomSubcollection(resolvedRoomId, "drawings");
+
+      const playerSnaps = await getDocs(
+        query(collection(db, "rooms", resolvedRoomId, "players"), orderBy("joinedAt", "asc"))
+      );
+      const currentPlayers = playerSnaps.docs.map((item) => item.data() as Player);
+
+      if (currentPlayers.length === 0) {
+        setVoteResultDialog({
+          open: true,
+          message: "재시작 실패: 플레이어 정보가 없습니다.",
+        });
+        return;
+      }
+
+      const turnOrder = shuffle(currentPlayers.map((player) => player.id));
+      const mafiaId = turnOrder[Math.floor(Math.random() * turnOrder.length)];
+      const selectedPrompt = PROMPT_POOL[Math.floor(Math.random() * PROMPT_POOL.length)];
+
+      const roomRef = doc(db, "rooms", resolvedRoomId);
+      const batch = writeBatch(db);
+
+      batch.update(roomRef, {
+        status: "playing",
+        prompt: selectedPrompt,
+        mafiaId,
+        turnOrder,
+        turnIndex: 0,
+        round: 1,
+        eliminatedPlayerId: null,
+        eliminatedRole: null,
+        resultMessage: "",
+        winner: null,
+        awaitingMafiaGuess: false,
+      });
+
+      currentPlayers.forEach((player) => {
+        const playerRef = doc(db, "rooms", resolvedRoomId, "players", player.id);
+
+        batch.update(playerRef, {
+          role: player.id === mafiaId ? "mafia" : "citizen",
+          alive: true,
+        });
+      });
+
+      await batch.commit();
+      setStartDialogOpen(true);
+      pushToast("같은 방에서 새 게임을 시작했습니다.");
+    } catch {
+      setVoteResultDialog({
+        open: true,
+        message: "게임 재시작 중 오류가 발생했습니다.",
+      });
+    } finally {
+      setRestartingGame(false);
+    }
+  };
+
   return (
     <>
       <main className="min-h-screen bg-dm-bg px-4 py-8 text-dm-text-primary sm:px-6 sm:py-10">
         <Card className="mx-auto w-full max-w-6xl p-4 sm:p-8" hover>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-3xl font-semibold tracking-tight">DRAW MAFIA</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-semibold tracking-tight">DRAW MAFIA</h1>
+              {isTestMode ? (
+                <span className="rounded-full border border-dm-secondary/45 bg-dm-secondary/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-dm-secondary">
+                  Test Mode
+                </span>
+              ) : null}
+            </div>
             <div className="flex items-center gap-3">
+              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${connectionClassName}`}>
+                {connectionLabel}
+              </span>
+              <Button
+                type="button"
+                onClick={() => setSoundEnabled((prev) => !prev)}
+                variant="ghost"
+                className="px-3 py-1 text-xs"
+              >
+                {soundEnabled ? "사운드 ON" : "사운드 OFF"}
+              </Button>
               <span className="rounded-md border border-dm-accent/40 px-3 py-1 text-xs text-dm-text-secondary">
                 ROOM {resolvedRoomId || "-"}
               </span>
@@ -838,6 +1133,27 @@ export default function GamePage({ params }: GamePageProps) {
               네트워크 지연이 감지되었습니다. 실시간 상태 동기화를 재시도 중입니다.
             </p>
           ) : null}
+
+          <Card className="mt-4 border-dm-accent/20 bg-dm-bg/35 p-3" hover>
+            <div className="flex flex-wrap items-center gap-2">
+              {stageGuide.map((stage) => {
+                const active = room?.status === stage.key;
+
+                return (
+                  <span
+                    key={stage.key}
+                    className={`rounded-full border px-3 py-1 text-xs transition-all duration-200 ${
+                      active
+                        ? "border-dm-accent bg-dm-accent/20 text-dm-text-primary shadow-dm-glow"
+                        : "border-dm-accent/20 text-dm-text-secondary"
+                    }`}
+                  >
+                    {stage.label}
+                  </span>
+                );
+              })}
+            </div>
+          </Card>
 
           {finalizingVote || continuingRound ? (
             <div className="mt-3">
@@ -928,6 +1244,44 @@ export default function GamePage({ params }: GamePageProps) {
               </ol>
             </Card>
           </div>
+
+          <Card className="mt-6 border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5" hover>
+            <h2 className="text-sm font-semibold text-dm-text-secondary">플레이어 상태</h2>
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {players.map((player) => {
+                const isTurnPlayer = room?.status === "playing" && currentTurnPlayer?.id === player.id;
+
+                return (
+                  <div
+                    key={player.id}
+                    className={`rounded-lg border px-3 py-2 text-sm transition-all duration-200 ${
+                      isTurnPlayer
+                        ? "border-dm-accent bg-dm-accent/15 shadow-dm-glow"
+                        : player.alive
+                          ? "border-dm-primary/25 bg-dm-bg/70"
+                          : "border-dm-secondary/35 bg-dm-bg/50 opacity-75"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-dm-text-primary">{player.nickname}</span>
+                      {isTurnPlayer ? <span className="text-xs text-dm-accent">턴</span> : null}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1 text-[11px]">
+                      <span className={`rounded-full border px-2 py-0.5 ${player.alive ? "border-dm-primary/35 text-dm-primary" : "border-dm-secondary/35 text-dm-secondary"}`}>
+                        {player.alive ? "생존" : "탈락"}
+                      </span>
+                      {player.isHost ? (
+                        <span className="rounded-full border border-dm-accent/35 px-2 py-0.5 text-dm-accent">방장</span>
+                      ) : null}
+                      {player.isBot || player.id.startsWith(TEST_BOT_PREFIX) ? (
+                        <span className="rounded-full border border-dm-secondary/35 px-2 py-0.5 text-dm-secondary">BOT</span>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
 
           <div className="mt-6 rounded-xl border border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1092,14 +1446,15 @@ export default function GamePage({ params }: GamePageProps) {
                         placeholder="제시어 전체 입력"
                         className="w-full rounded-md border border-dm-secondary/40 bg-dm-bg px-3 py-2 text-sm text-dm-text-primary outline-none"
                       />
-                      <button
+                      <Button
                         type="button"
                         onClick={handleMafiaGuessSubmit}
                         disabled={submittingGuess}
-                        className="rounded-md bg-dm-secondary px-4 py-2 text-sm font-semibold text-dm-text-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                        variant="secondary"
+                        className="px-4 py-2 text-sm"
                       >
                         {submittingGuess ? "확인 중..." : "추측 제출"}
-                      </button>
+                      </Button>
                     </div>
                   ) : (
                     <p className="mt-3 text-sm text-dm-text-secondary">마피아의 추측을 기다리는 중입니다.</p>
@@ -1109,14 +1464,14 @@ export default function GamePage({ params }: GamePageProps) {
 
               {!room.awaitingMafiaGuess && !room.winner ? (
                 <div className="mt-4 flex justify-end">
-                  <button
+                  <Button
                     type="button"
                     onClick={handleContinueRound}
                     disabled={!isHost || continuingRound}
-                    className="rounded-md bg-dm-accent px-4 py-2 text-sm font-semibold text-dm-text-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="px-4 py-2 text-sm"
                   >
                     {continuingRound ? "준비 중..." : "다음 라운드"}
-                  </button>
+                  </Button>
                 </div>
               ) : null}
             </div>
@@ -1132,10 +1487,19 @@ export default function GamePage({ params }: GamePageProps) {
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button
                   type="button"
-                  onClick={() => router.push("/")}
+                  onClick={handleRestartGame}
+                  disabled={!isHost || restartingGame}
                   className="px-4 py-2 text-sm"
                 >
-                  다시 시작
+                  {restartingGame ? "재시작 중..." : "같은 방 다시 시작"}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => router.push("/")}
+                  variant="secondary"
+                  className="px-4 py-2 text-sm"
+                >
+                  홈으로 이동
                 </Button>
                 <Button
                   type="button"
