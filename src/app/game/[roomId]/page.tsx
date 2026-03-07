@@ -27,7 +27,7 @@ import { getOrCreatePlayerId } from "@/utils/player";
 import { resolveTestMode } from "@/utils/testMode";
 
 type GamePageProps = {
-  params: Promise<{ roomId: string }>;
+  params: { roomId: string };
 };
 
 type Vote = {
@@ -99,7 +99,7 @@ async function clearRoomSubcollection(roomId: string, subcollection: "drawings" 
 export default function GamePage({ params }: GamePageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [resolvedRoomId, setResolvedRoomId] = useState("");
+  const [resolvedRoomId] = useState(params.roomId);
   const [room, setRoom] = useState<Room | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
@@ -227,22 +227,6 @@ export default function GamePage({ params }: GamePageProps) {
   useEffect(() => {
     window.localStorage.setItem(SOUND_STORAGE_KEY, String(soundEnabled));
   }, [soundEnabled]);
-
-  useEffect(() => {
-    let mounted = true;
-
-    params.then((value) => {
-      if (!mounted) {
-        return;
-      }
-
-      setResolvedRoomId(value.roomId);
-    });
-
-    return () => {
-      mounted = false;
-    };
-  }, [params]);
 
   useEffect(() => {
     if (!resolvedRoomId) {

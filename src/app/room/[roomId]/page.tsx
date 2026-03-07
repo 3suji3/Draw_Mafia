@@ -25,7 +25,7 @@ import { getOrCreatePlayerId, getStoredNickname, getStoredRoomId } from "@/utils
 import { resolveTestMode } from "@/utils/testMode";
 
 type RoomPageProps = {
-  params: Promise<{ roomId: string }>;
+  params: { roomId: string };
 };
 
 type DialogState = {
@@ -59,7 +59,7 @@ function shuffle<T>(items: T[]): T[] {
 export default function RoomPage({ params }: RoomPageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [resolvedRoomId, setResolvedRoomId] = useState("");
+  const [resolvedRoomId] = useState(params.roomId);
   const [room, setRoom] = useState<Room | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,22 +103,6 @@ export default function RoomPage({ params }: RoomPageProps) {
       window.removeEventListener("offline", syncOnlineState);
     };
   }, []);
-
-  useEffect(() => {
-    let mounted = true;
-
-    params.then((value) => {
-      if (!mounted) {
-        return;
-      }
-
-      setResolvedRoomId(value.roomId);
-    });
-
-    return () => {
-      mounted = false;
-    };
-  }, [params]);
 
   useEffect(() => {
     if (!resolvedRoomId) {
