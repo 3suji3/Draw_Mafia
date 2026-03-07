@@ -49,12 +49,12 @@ const VOTE_SKIP_TARGET = "skip";
 const SOUND_STORAGE_KEY = "draw_mafia_sound_enabled";
 const TEST_BOT_PREFIX = "bot";
 
-function getTurnTimerKey(roomId: string, round: number, turnIndex: number): string {
-  return `${TIMER_STORAGE_PREFIX}_${roomId}_${round}_${turnIndex}`;
+function getTurnTimerKey(roomId: string, gameSession: number, round: number, turnIndex: number): string {
+  return `${TIMER_STORAGE_PREFIX}_${roomId}_${gameSession}_${round}_${turnIndex}`;
 }
 
-function getVoteTimerKey(roomId: string, round: number): string {
-  return `${VOTE_TIMER_STORAGE_PREFIX}_${roomId}_${round}`;
+function getVoteTimerKey(roomId: string, gameSession: number, round: number): string {
+  return `${VOTE_TIMER_STORAGE_PREFIX}_${roomId}_${gameSession}_${round}`;
 }
 
 function isMafiaHintAction(roomId: string, mafiaId: string, round: number): boolean {
@@ -357,6 +357,7 @@ export default function GamePage({ params }: GamePageProps) {
   );
   const isHost = Boolean(currentPlayer?.isHost && room?.hostId === currentPlayer?.id);
   const isAlive = Boolean(currentPlayer?.alive);
+  const currentGameSession = room?.gameSession ?? 0;
 
   const connectionLabel = !isOnline
     ? "오프라인"
@@ -486,7 +487,7 @@ export default function GamePage({ params }: GamePageProps) {
       return;
     }
 
-    const timerKey = getTurnTimerKey(resolvedRoomId, room.round, room.turnIndex);
+    const timerKey = getTurnTimerKey(resolvedRoomId, currentGameSession, room.round, room.turnIndex);
     const existing = window.localStorage.getItem(timerKey);
 
     if (existing) {
@@ -501,7 +502,7 @@ export default function GamePage({ params }: GamePageProps) {
     const now = Date.now();
     window.localStorage.setItem(timerKey, String(now));
     setTurnStartedAtMs(now);
-  }, [resolvedRoomId, room?.round, room?.status, room?.turnIndex]);
+  }, [currentGameSession, resolvedRoomId, room?.round, room?.status, room?.turnIndex]);
 
   useEffect(() => {
     if (!room || !resolvedRoomId || room.status !== "voting") {
@@ -509,7 +510,7 @@ export default function GamePage({ params }: GamePageProps) {
       return;
     }
 
-    const timerKey = getVoteTimerKey(resolvedRoomId, room.round);
+    const timerKey = getVoteTimerKey(resolvedRoomId, currentGameSession, room.round);
     const existing = window.localStorage.getItem(timerKey);
 
     if (existing) {
@@ -524,7 +525,7 @@ export default function GamePage({ params }: GamePageProps) {
     const now = Date.now();
     window.localStorage.setItem(timerKey, String(now));
     setVoteStartedAtMs(now);
-  }, [resolvedRoomId, room?.round, room?.status]);
+  }, [currentGameSession, resolvedRoomId, room?.round, room?.status]);
 
   const advanceTurn = async () => {
     if (!room || endingTurn) {
@@ -849,7 +850,7 @@ export default function GamePage({ params }: GamePageProps) {
       return;
     }
 
-    const turnKey = `${room.round}-${room.turnIndex}`;
+    const turnKey = `${currentGameSession}-${room.round}-${room.turnIndex}`;
 
     if (autoAdvancedTurnKeyRef.current === turnKey) {
       return;
@@ -860,7 +861,7 @@ export default function GamePage({ params }: GamePageProps) {
     void advanceTurn().catch(() => {
       autoAdvancedTurnKeyRef.current = "";
     });
-  }, [endingTurn, isHost, remainingSeconds, room]);
+  }, [currentGameSession, endingTurn, isHost, remainingSeconds, room]);
 
   useEffect(() => {
     if (!room || room.status !== "voting" || !isHost) {
@@ -873,7 +874,7 @@ export default function GamePage({ params }: GamePageProps) {
       return;
     }
 
-    const voteKey = `${room.round}-${room.status}`;
+    const voteKey = `${currentGameSession}-${room.round}-${room.status}`;
 
     if (autoFinalizedVoteKeyRef.current === voteKey) {
       return;
@@ -884,7 +885,7 @@ export default function GamePage({ params }: GamePageProps) {
     void finalizeVoting().catch(() => {
       autoFinalizedVoteKeyRef.current = "";
     });
-  }, [allVotesCompleted, finalizingVote, isHost, room, voteRemainingSeconds]);
+  }, [allVotesCompleted, currentGameSession, finalizingVote, isHost, room, voteRemainingSeconds]);
 
   useEffect(() => {
     if (
@@ -898,7 +899,7 @@ export default function GamePage({ params }: GamePageProps) {
       return;
     }
 
-    const roundKey = `${room.round}-${room.status}`;
+    const roundKey = `${currentGameSession}-${room.round}-${room.status}`;
 
     if (autoContinuedRoundKeyRef.current === roundKey) {
       return;
@@ -915,7 +916,7 @@ export default function GamePage({ params }: GamePageProps) {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [continuingRound, isHost, room]);
+  }, [continuingRound, currentGameSession, isHost, room]);
 
   const colorPalette = [
     "#f8fafc",
@@ -1042,7 +1043,7 @@ export default function GamePage({ params }: GamePageProps) {
       return;
     }
 
-    const winnerDialogKey = `${room.round}-${room.winner}-${currentPlayer.id}`;
+    const winnerDialogKey = `${currentGameSession}-${room.round}-${room.winner}-${currentPlayer.id}`;
 
     if (previousWinnerDialogKeyRef.current === winnerDialogKey) {
       return;
@@ -1079,7 +1080,7 @@ export default function GamePage({ params }: GamePageProps) {
       return;
     }
 
-    const botTurnKey = `${room.round}-${room.turnIndex}`;
+    const botTurnKey = `${currentGameSession}-${room.round}-${room.turnIndex}`;
 
     if (botAutoTurnKeyRef.current === botTurnKey || endingTurn) {
       return;
@@ -1096,7 +1097,7 @@ export default function GamePage({ params }: GamePageProps) {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [currentTurnPlayer, endingTurn, isHost, isTestMode, room]);
+  }, [currentGameSession, currentTurnPlayer, endingTurn, isHost, isTestMode, room]);
 
   useEffect(() => {
     if (!isTestMode || !isHost || !room || room.status !== "voting" || aliveBotPlayers.length === 0) {
@@ -1157,6 +1158,7 @@ export default function GamePage({ params }: GamePageProps) {
 
       batch.update(roomRef, {
         status: "playing",
+        gameSession: currentGameSession + 1,
         prompt: selectedPrompt,
         mafiaId,
         turnOrder,
@@ -1193,440 +1195,325 @@ export default function GamePage({ params }: GamePageProps) {
 
   return (
     <>
-      <main className="min-h-screen bg-dm-bg px-4 py-8 text-dm-text-primary sm:px-6 sm:py-10">
-        <Card className="mx-auto w-full max-w-6xl p-4 sm:p-8" hover>
-          <div className="flex flex-wrap items-center justify-between gap-3">
+      <main className="h-screen overflow-hidden bg-dm-bg p-3 text-dm-text-primary sm:p-4">
+        <Card className="mx-auto flex h-full w-full max-w-[1500px] flex-col overflow-hidden p-3 sm:p-4" hover>
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-semibold tracking-tight">DRAW MAFIA</h1>
+              <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">DRAW MAFIA</h1>
               {isTestMode ? (
-                <span className="rounded-full border border-dm-secondary/45 bg-dm-secondary/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-dm-secondary">
-                  Test Mode
+                <span className="rounded-full border border-dm-secondary/45 bg-dm-secondary/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-dm-secondary">
+                  TEST
                 </span>
               ) : null}
             </div>
-            <div className="flex items-center gap-3">
-              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${connectionClassName}`}>
+            <div className="flex items-center gap-2">
+              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${connectionClassName}`}>
                 {connectionLabel}
+              </span>
+              <span className="rounded-md border border-dm-accent/40 px-2 py-0.5 text-[10px] text-dm-text-secondary">
+                ROOM {resolvedRoomId || "-"}
               </span>
               <Button
                 type="button"
                 onClick={() => setSoundEnabled((prev) => !prev)}
                 variant="ghost"
-                className="px-3 py-1 text-xs"
+                className="px-2 py-1 text-[10px]"
               >
-                {soundEnabled ? "사운드 ON" : "사운드 OFF"}
+                {soundEnabled ? "SOUND ON" : "SOUND OFF"}
               </Button>
-              <span className="rounded-md border border-dm-accent/40 px-3 py-1 text-xs text-dm-text-secondary">
-                ROOM {resolvedRoomId || "-"}
-              </span>
               <Button
                 type="button"
                 onClick={handleLeaveRoom}
                 disabled={leavingRoom}
                 variant="secondary"
-                className="px-3 py-1 text-xs"
+                className="px-2 py-1 text-[10px]"
               >
-                {leavingRoom ? "나가는 중..." : "방 나가기"}
+                {leavingRoom ? "이탈 중" : "방 나가기"}
               </Button>
             </div>
           </div>
 
-          {networkDelayed ? (
-            <p className="mt-3 text-sm text-dm-secondary">
-              네트워크 지연이 감지되었습니다. 실시간 상태 동기화를 재시도 중입니다.
-            </p>
-          ) : null}
+          <Card className="mt-2 shrink-0 border-dm-accent/20 bg-dm-bg/35 p-3" hover>
+            <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
+              <div>
+                <p className="text-[10px] font-semibold text-dm-text-secondary">GAME STATUS</p>
+                <div className="mt-1 flex flex-wrap items-center gap-1">
+                  {stageGuide.map((stage) => {
+                    const active = room?.status === stage.key;
 
-          <Card className="mt-4 border-dm-accent/20 bg-dm-bg/35 p-3" hover>
-            <div className="flex flex-wrap items-center gap-2">
-              {stageGuide.map((stage) => {
-                const active = room?.status === stage.key;
+                    return (
+                      <span
+                        key={stage.key}
+                        className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                          active
+                            ? "border-dm-accent bg-dm-accent/20 text-dm-text-primary"
+                            : "border-dm-accent/20 text-dm-text-secondary"
+                        }`}
+                      >
+                        {stage.label}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
 
-                return (
-                  <span
-                    key={stage.key}
-                    className={`rounded-full border px-3 py-1 text-xs transition-all duration-200 ${
-                      active
-                        ? "border-dm-accent bg-dm-accent/20 text-dm-text-primary shadow-dm-glow"
-                        : "border-dm-accent/20 text-dm-text-secondary"
-                    }`}
-                  >
-                    {stage.label}
-                  </span>
-                );
-              })}
+              <div>
+                <p className="text-[10px] font-semibold text-dm-text-secondary">CURRENT PROMPT</p>
+                <p className="mt-1 truncate text-sm font-semibold text-dm-secondary">{visiblePrompt || "로딩 중..."}</p>
+              </div>
+
+              <div>
+                <p className="text-[10px] font-semibold text-dm-text-secondary">TIMER</p>
+                <p className="mt-1 text-lg font-bold text-dm-accent">
+                  {room?.status === "voting" ? `${voteRemainingSeconds}s` : `${remainingSeconds}s`}
+                </p>
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-dm-card">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-dm-primary to-dm-accent transition-all duration-500"
+                    style={{
+                      width: `${room?.status === "voting" ? voteTimerPercent : drawTimerPercent}%`,
+                    }}
+                  />
+                </div>
+              </div>
             </div>
           </Card>
 
+          {networkDelayed ? (
+            <p className="mt-1 shrink-0 text-xs text-dm-secondary">네트워크 지연이 감지되었습니다. 동기화 재시도 중입니다.</p>
+          ) : null}
+
           {finalizingVote || continuingRound ? (
-            <div className="mt-3">
+            <div className="mt-1 shrink-0">
               <LoadingSpinner label="데이터 동기화 중..." />
             </div>
           ) : null}
 
-          <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <Card className="border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5" hover>
-              <h2 className="text-sm font-semibold text-dm-text-secondary">내 역할</h2>
-              <p className="mt-2 text-xl font-bold text-dm-accent">
-                {currentPlayer?.role === "mafia" ? "마피아" : "시민"}
-              </p>
-              <p className="mt-3 text-xs text-dm-text-secondary">내 정보만 확인 가능합니다.</p>
+          <div className="mt-3 grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden lg:grid-cols-[minmax(0,1fr)_320px]">
+            <Card className="flex min-h-0 flex-col border-dm-accent/20 bg-dm-bg/40 p-3" hover>
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-dm-text-secondary">DRAW BOARD</h2>
+                <p className="text-[10px] text-dm-text-secondary">
+                  {room?.status === "playing"
+                    ? isMyTurn
+                      ? "내 턴"
+                      : "상대 턴"
+                    : room?.status === "voting"
+                      ? "투표 중"
+                      : room?.status === "result"
+                        ? "결과 처리"
+                        : "종료"}
+                </p>
+              </div>
+              <div className="mt-2 min-h-0 flex-1">
+                <CanvasBoard
+                  strokes={strokes}
+                  canDraw={isMyTurn && room?.status === "playing"}
+                  tool={tool}
+                  color={color}
+                  size={size}
+                  onStrokeComplete={handleStrokeComplete}
+                />
+              </div>
             </Card>
 
-            <Card className="border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5 lg:col-span-2" hover>
-              <h2 className="text-sm font-semibold text-dm-text-secondary">내 제시어</h2>
-              <p className="mt-2 text-2xl font-bold text-dm-secondary">{visiblePrompt || "로딩 중..."}</p>
-              <p className="mt-3 text-xs text-dm-text-secondary">
-                시민은 전체, 마피아는 행동/피사체 하나만 확인합니다.
-              </p>
-            </Card>
-          </div>
+            <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
+              <Card className="border-dm-accent/20 bg-dm-bg/40 p-3" hover>
+                <p className="text-[10px] font-semibold text-dm-text-secondary">현재 턴 플레이어</p>
+                <p className="mt-1 text-sm font-semibold text-dm-accent">{currentTurnPlayer?.nickname ?? "대기 중"}</p>
+                <p className="mt-1 text-[10px] text-dm-text-secondary">내 역할: {currentPlayer?.role === "mafia" ? "마피아" : "시민"}</p>
+                <p className="text-[10px] text-dm-text-secondary">투표: {votedCount} / {eligibleVoterIds.length}</p>
+              </Card>
 
-          <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <Card className="border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5" hover>
-              <h2 className="text-sm font-semibold text-dm-text-secondary">턴 정보</h2>
-              <p className="mt-2 text-sm text-dm-text-secondary">현재 턴</p>
-              <p className="text-lg font-semibold text-dm-accent">
-                {currentTurnPlayer?.nickname ?? "대기 중"}
-              </p>
-              <p className="mt-3 text-xs text-dm-text-secondary">
-                turnIndex: {room?.turnIndex ?? 0} / round: {room?.round ?? 1}
-              </p>
+              <Card className="min-h-0 flex flex-1 flex-col overflow-hidden border-dm-accent/20 bg-dm-bg/40 p-3" hover>
+                <h3 className="text-[10px] font-semibold text-dm-text-secondary">플레이어 목록</h3>
+                <ul className="mt-2 space-y-1 overflow-y-auto text-xs">
+                  {room?.turnOrder.map((turnPlayerId, index) => {
+                    const player = players.find((item) => item.id === turnPlayerId);
+                    const active = room.turnIndex === index;
+                    const eliminated = !player?.alive;
 
-              {room?.status === "playing" ? (
-                <div className="mt-4 rounded-md border border-dm-accent/30 bg-dm-bg/70 p-3">
-                  <p className="text-xs text-dm-text-secondary">DRAW TIMER</p>
-                  <p className="mt-1 text-2xl font-bold text-dm-accent">{remainingSeconds}s</p>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-dm-card">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-dm-primary to-dm-secondary transition-all duration-500"
-                      style={{ width: `${drawTimerPercent}%` }}
-                    />
-                  </div>
-                </div>
-              ) : null}
+                    return (
+                      <li
+                        key={turnPlayerId}
+                        className={`flex items-center justify-between rounded-md border px-2 py-1 ${
+                          active
+                            ? "border-dm-accent bg-dm-accent/18 text-dm-text-primary"
+                            : eliminated
+                              ? "border-dm-accent/10 bg-dm-bg/40 text-dm-text-secondary/50 opacity-55"
+                              : "border-dm-accent/20 bg-dm-bg text-dm-text-secondary"
+                        }`}
+                      >
+                        <span className={eliminated ? "line-through" : ""}>{player?.nickname ?? "알 수 없음"}</span>
+                        <span>{player?.alive ? "생존" : "탈락"}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Card>
 
               {room?.status === "voting" ? (
-                <div className="mt-4 rounded-md border border-dm-secondary/40 bg-dm-bg/70 p-3">
-                  <p className="text-xs text-dm-secondary">VOTING TIMER</p>
-                  <p className="mt-1 text-2xl font-bold text-dm-secondary">{voteRemainingSeconds}s</p>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-dm-card">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-dm-secondary to-dm-accent transition-all duration-500"
-                      style={{ width: `${voteTimerPercent}%` }}
-                    />
-                  </div>
-                  <p className="mt-1 text-xs text-dm-text-secondary">
-                    투표 진행: {votedCount} / {eligibleVoterIds.length}
-                  </p>
-                </div>
-              ) : null}
-            </Card>
-
-            <Card className="border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5" hover>
-              <h2 className="text-sm font-semibold text-dm-text-secondary">턴 순서</h2>
-              <ol className="mt-3 space-y-2 text-sm">
-                {room?.turnOrder.map((turnPlayerId, index) => {
-                  const player = players.find((item) => item.id === turnPlayerId);
-                  const active = room.turnIndex === index;
-
-                  return (
-                    <li
-                      key={turnPlayerId}
-                      className={`flex items-center justify-between rounded-md border px-3 py-2 ${
-                        active
-                          ? "border-dm-accent bg-dm-accent/18 text-dm-text-primary shadow-dm-glow animate-pulse"
-                          : "border-dm-accent/20 bg-dm-bg text-dm-text-secondary"
-                      }`}
+                <Card className="border-dm-secondary/40 bg-dm-bg/45 p-3" hover>
+                  <h3 className="text-[10px] font-semibold text-dm-secondary">VOTING</h3>
+                  <div className="mt-2 grid grid-cols-1 gap-1">
+                    {alivePlayers.map((player) => (
+                      <Button
+                        key={player.id}
+                        type="button"
+                        variant="ghost"
+                        onClick={() => handleCastVote(player.id)}
+                        disabled={!isAlive || Boolean(myVote) || submittingVote}
+                        className="flex items-center justify-between px-2 py-1 text-xs"
+                      >
+                        <span>{player.nickname}</span>
+                        <span>투표</span>
+                      </Button>
+                    ))}
+                    <Button
+                      type="button"
+                      onClick={() => handleCastVote(VOTE_SKIP_TARGET)}
+                      disabled={!isAlive || Boolean(myVote) || submittingVote}
+                      className="px-2 py-1 text-xs"
                     >
-                      <span>{active ? "◆" : `${index + 1}.`}</span>
-                      <span>{player?.nickname ?? "알 수 없음"}</span>
-                    </li>
-                  );
-                })}
-              </ol>
-            </Card>
-          </div>
-
-          <Card className="mt-6 border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5" hover>
-            <h2 className="text-sm font-semibold text-dm-text-secondary">플레이어 상태</h2>
-            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              {players.map((player) => {
-                const isTurnPlayer = room?.status === "playing" && currentTurnPlayer?.id === player.id;
-
-                return (
-                  <div
-                    key={player.id}
-                    className={`rounded-lg border px-3 py-2 text-sm transition-all duration-200 ${
-                      isTurnPlayer
-                        ? "border-dm-accent bg-dm-accent/15 shadow-dm-glow"
-                        : player.alive
-                          ? "border-dm-primary/25 bg-dm-bg/70"
-                          : "border-dm-secondary/35 bg-dm-bg/50 opacity-75"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-dm-text-primary">{player.nickname}</span>
-                      {isTurnPlayer ? <span className="text-xs text-dm-accent">턴</span> : null}
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-1 text-[11px]">
-                      <span className={`rounded-full border px-2 py-0.5 ${player.alive ? "border-dm-primary/35 text-dm-primary" : "border-dm-secondary/35 text-dm-secondary"}`}>
-                        {player.alive ? "생존" : "탈락"}
-                      </span>
-                      {player.isHost ? (
-                        <span className="rounded-full border border-dm-accent/35 px-2 py-0.5 text-dm-accent">방장</span>
-                      ) : null}
-                      {player.isBot || player.id.startsWith(TEST_BOT_PREFIX) ? (
-                        <span className="rounded-full border border-dm-secondary/35 px-2 py-0.5 text-dm-secondary">BOT</span>
-                      ) : null}
-                    </div>
+                      넘어가기
+                    </Button>
                   </div>
-                );
-              })}
-            </div>
-          </Card>
+                </Card>
+              ) : null}
 
-          <div className="mt-6 rounded-xl border border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-dm-text-secondary">DRAW BOARD</h2>
-              <p className="text-xs text-dm-text-secondary">
-                {room?.status === "playing"
-                  ? isMyTurn
-                    ? "현재 당신의 턴입니다."
-                    : "다른 플레이어의 턴입니다."
-                  : room?.status === "voting"
-                    ? "투표 진행 중"
-                    : room?.status === "result"
-                      ? "결과 처리 단계"
-                      : "게임 종료"}
-              </p>
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setTool("pen")}
-                className={`rounded-md border px-3 py-2 text-sm ${
-                  tool === "pen"
-                    ? "border-dm-accent bg-dm-accent/20 text-dm-text-primary"
-                    : "border-dm-accent/25 bg-dm-bg text-dm-text-secondary"
-                }`}
-              >
-                펜
-              </button>
-              <button
-                type="button"
-                onClick={() => setTool("eraser")}
-                className={`rounded-md border px-3 py-2 text-sm ${
-                  tool === "eraser"
-                    ? "border-dm-secondary bg-dm-secondary/20 text-dm-text-primary"
-                    : "border-dm-secondary/30 bg-dm-bg text-dm-text-secondary"
-                }`}
-              >
-                지우개
-              </button>
-
-              <div className="ml-1 flex items-center gap-2">
-                {colorPalette.map((paletteColor) => (
-                  <button
-                    key={paletteColor}
-                    type="button"
-                    onClick={() => setColor(paletteColor)}
-                    title={paletteColor}
-                    className={`h-7 w-7 rounded-full border-2 ${
-                      color === paletteColor ? "border-dm-text-primary" : "border-dm-text-secondary"
-                    }`}
-                    style={{ backgroundColor: paletteColor }}
-                  />
-                ))}
-              </div>
-
-              <label className="ml-auto flex items-center gap-2 text-xs text-dm-text-secondary">
-                굵기
-                <input
-                  type="range"
-                  min={2}
-                  max={18}
-                  value={size}
-                  onChange={(event) => setSize(Number(event.target.value))}
-                />
-                <span>{size}</span>
-              </label>
-            </div>
-
-            <div className="mt-4">
-              <CanvasBoard
-                strokes={strokes}
-                canDraw={isMyTurn && room?.status === "playing"}
-                tool={tool}
-                color={color}
-                size={size}
-                onStrokeComplete={handleStrokeComplete}
-              />
-            </div>
-
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
-                type="button"
-                onClick={handleClearCanvas}
-                disabled={!isMyTurn || room?.status !== "playing" || clearingCanvas}
-                variant="ghost"
-                className="px-4 py-2 text-sm"
-              >
-                {clearingCanvas ? "지우는 중..." : "전체 지우기"}
-              </Button>
-              <Button
-                type="button"
-                onClick={handleEndTurn}
-                disabled={!isMyTurn || endingTurn || room?.status !== "playing"}
-                className="px-4 py-2 text-sm"
-              >
-                {endingTurn ? "처리 중..." : "턴 종료"}
-              </Button>
-            </div>
-          </div>
-
-          {room?.status === "voting" ? (
-            <Card className="mt-6 border-dm-secondary/40 bg-dm-bg/45 p-4 sm:p-5" hover>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold text-dm-secondary">VOTING PHASE</h2>
-                <p className="text-xs text-dm-text-secondary">
-                  {isAlive
-                    ? myVote
-                      ? "이미 투표 완료"
-                      : "1인 1표"
-                    : "탈락자는 투표 불가"}
-                </p>
-              </div>
-
-              <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {alivePlayers.map((player) => (
-                  <Button
-                    key={player.id}
-                    type="button"
-                    variant="ghost"
-                    onClick={() => handleCastVote(player.id)}
-                    disabled={!isAlive || Boolean(myVote) || submittingVote}
-                    className="flex items-center justify-between px-3 py-2 text-sm"
-                  >
-                    <span>{player.nickname}</span>
-                    <span className="text-xs text-dm-secondary">투표</span>
-                  </Button>
-                ))}
-
-                <Button
-                  type="button"
-                  onClick={() => handleCastVote(VOTE_SKIP_TARGET)}
-                  disabled={!isAlive || Boolean(myVote) || submittingVote}
-                  className="px-3 py-2 text-sm"
-                >
-                  넘어가기 투표
-                </Button>
-              </div>
-
-              <div className="mt-4 rounded-md border border-dm-accent/20 bg-dm-bg/70 p-3 text-xs text-dm-text-secondary">
-                {voteResult.shouldEliminate
-                  ? `현재 최다 득표: ${players.find((player) => player.id === voteResult.topTargetId)?.nickname ?? "알 수 없음"} (${voteResult.topCount}표)`
-                  : "현재 집계: 동률 또는 넘어가기 우세"}
-              </div>
-            </Card>
-          ) : null}
-
-          {room?.status === "result" ? (
-            <div className="mt-6 rounded-xl border border-dm-accent/35 bg-dm-bg/45 p-4 sm:p-5">
-              <h2 className="text-sm font-semibold text-dm-accent">RESULT PHASE</h2>
-              <p className="mt-2 text-sm text-dm-text-primary">{room.resultMessage ?? "결과를 계산 중입니다."}</p>
-
-              {room.eliminatedPlayerId ? (
-                <p className="mt-2 text-sm text-dm-text-secondary">
-                  탈락자: {eliminatedPlayer?.nickname ?? "알 수 없음"} / 정체: {room.eliminatedRole ?? "미확인"}
-                </p>
-              ) : (
-                <p className="mt-2 text-sm text-dm-text-secondary">이번 라운드 탈락자 없음</p>
-              )}
-
-              {room.awaitingMafiaGuess ? (
-                <div className="mt-4 rounded-md border border-dm-secondary/40 bg-dm-bg/70 p-4">
-                  <p className="text-sm text-dm-secondary">마피아 제시어 추측 기회</p>
-
-                  {currentPlayer?.role === "mafia" ? (
-                    <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+              {room?.status === "result" ? (
+                <Card className="border-dm-accent/35 bg-dm-bg/45 p-3" hover>
+                  <h3 className="text-[10px] font-semibold text-dm-accent">RESULT</h3>
+                  <p className="mt-1 text-xs text-dm-text-primary">{room.resultMessage ?? "결과 계산 중"}</p>
+                  {room.awaitingMafiaGuess && currentPlayer?.role === "mafia" ? (
+                    <div className="mt-2 flex gap-1">
                       <input
                         type="text"
                         value={mafiaGuessWord}
                         onChange={(event) => setMafiaGuessWord(event.target.value)}
-                        placeholder="제시어 전체 입력"
-                        className="w-full rounded-md border border-dm-secondary/40 bg-dm-bg px-3 py-2 text-sm text-dm-text-primary outline-none"
+                        placeholder="제시어 입력"
+                        className="w-full rounded-md border border-dm-secondary/40 bg-dm-bg px-2 py-1 text-xs text-dm-text-primary outline-none"
                       />
                       <Button
                         type="button"
                         onClick={handleMafiaGuessSubmit}
                         disabled={submittingGuess}
                         variant="secondary"
-                        className="px-4 py-2 text-sm"
+                        className="px-2 py-1 text-xs"
                       >
-                        {submittingGuess ? "확인 중..." : "추측 제출"}
+                        제출
                       </Button>
                     </div>
-                  ) : (
-                    <p className="mt-3 text-sm text-dm-text-secondary">마피아의 추측을 기다리는 중입니다.</p>
-                  )}
-                </div>
+                  ) : null}
+                </Card>
               ) : null}
 
-              {!room.awaitingMafiaGuess && !room.winner ? (
-                <div className="mt-4 flex justify-end">
-                  <p className="rounded-md border border-dm-accent/30 bg-dm-accent/10 px-3 py-2 text-sm text-dm-text-secondary">
-                    {isHost
-                      ? continuingRound
-                        ? "다음 라운드 자동 전환 중..."
-                        : "잠시 후 다음 라운드로 자동 전환됩니다."
-                      : "방장이 다음 라운드로 자동 전환합니다."}
-                  </p>
-                </div>
+              {room?.status === "ended" ? (
+                <Card className="border-dm-secondary/45 bg-dm-bg/50 p-3" hover>
+                  <h3 className="text-sm font-bold text-dm-secondary">GAME END</h3>
+                  <p className="mt-1 text-xs text-dm-text-primary">승리 팀: {room.winner === "mafia" ? "마피아" : "시민"}</p>
+                  <p className="text-xs text-dm-accent">승리자: {winnerNicknames.length > 0 ? winnerNicknames.join(", ") : "확인 불가"}</p>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    <Button
+                      type="button"
+                      onClick={handleRestartGame}
+                      disabled={!isHost || restartingGame}
+                      className="px-2 py-1 text-xs"
+                    >
+                      {restartingGame ? "재시작 중" : "같은 방 다시 시작"}
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => router.push("/")}
+                      variant="secondary"
+                      className="px-2 py-1 text-xs"
+                    >
+                      홈
+                    </Button>
+                  </div>
+                </Card>
               ) : null}
             </div>
-          ) : null}
+          </div>
 
-          {room?.status === "ended" ? (
-            <div className="mt-6 rounded-xl border border-dm-secondary/45 bg-dm-bg/50 p-4 sm:p-5">
-              <h2 className="text-xl font-bold text-dm-secondary">GAME END</h2>
-              <p className="mt-2 text-sm text-dm-text-primary">
-                승리 팀: {room.winner === "mafia" ? "마피아" : "시민"}
-              </p>
-              <p className="mt-1 text-sm text-dm-accent">
-                승리 플레이어: {winnerNicknames.length > 0 ? winnerNicknames.join(", ") : "확인 불가"}
-              </p>
-              <p className="mt-1 text-sm text-dm-text-secondary">{room.resultMessage ?? "게임 종료"}</p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button
+          <Card className="relative z-20 mt-3 shrink-0 border-dm-accent/20 bg-dm-bg/40 p-3" hover>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-[auto_1fr_auto] md:items-center">
+              <div className="flex items-center gap-2">
+                <button
                   type="button"
-                  onClick={handleRestartGame}
-                  disabled={!isHost || restartingGame}
-                  className="px-4 py-2 text-sm"
+                  onClick={() => setTool("pen")}
+                  className={`rounded-md border px-3 py-1.5 text-xs ${
+                    tool === "pen"
+                      ? "border-dm-accent bg-dm-accent/20 text-dm-text-primary"
+                      : "border-dm-accent/25 bg-dm-bg text-dm-text-secondary"
+                  }`}
                 >
-                  {restartingGame ? "재시작 중..." : "같은 방 다시 시작"}
-                </Button>
-                <Button
+                  펜
+                </button>
+                <button
                   type="button"
-                  onClick={() => router.push("/")}
-                  variant="secondary"
-                  className="px-4 py-2 text-sm"
+                  onClick={() => setTool("eraser")}
+                  className={`rounded-md border px-3 py-1.5 text-xs ${
+                    tool === "eraser"
+                      ? "border-dm-secondary bg-dm-secondary/20 text-dm-text-primary"
+                      : "border-dm-secondary/30 bg-dm-bg text-dm-text-secondary"
+                  }`}
                 >
-                  홈으로 이동
-                </Button>
+                  지우개
+                </button>
+              </div>
+
+              <div className="flex min-w-0 flex-wrap items-center gap-2 md:justify-center">
+                <div className="flex items-center gap-1.5">
+                  {colorPalette.map((paletteColor) => (
+                    <button
+                      key={paletteColor}
+                      type="button"
+                      onClick={() => setColor(paletteColor)}
+                      title={paletteColor}
+                      className={`h-6 w-6 rounded-full border-2 ${
+                        color === paletteColor ? "border-dm-text-primary shadow-dm-glow" : "border-dm-text-secondary"
+                      }`}
+                      style={{ backgroundColor: paletteColor }}
+                    />
+                  ))}
+                </div>
+
+                <label className="flex items-center gap-2 text-xs text-dm-text-secondary">
+                  굵기
+                  <input
+                    type="range"
+                    className="w-28 sm:w-32"
+                    min={2}
+                    max={18}
+                    value={size}
+                    onChange={(event) => setSize(Number(event.target.value))}
+                  />
+                  <span>{size}</span>
+                </label>
+              </div>
+
+              <div className="flex items-center gap-1 md:justify-end">
                 <Button
                   type="button"
-                  onClick={handleLeaveRoom}
-                  disabled={leavingRoom}
+                  onClick={handleClearCanvas}
+                  disabled={!isMyTurn || room?.status !== "playing" || clearingCanvas}
                   variant="ghost"
-                  className="px-4 py-2 text-sm"
+                  className="px-3 py-1 text-xs"
                 >
-                  방 나가기
+                  {clearingCanvas ? "지우는 중" : "전체 지우기"}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleEndTurn}
+                  disabled={!isMyTurn || endingTurn || room?.status !== "playing"}
+                  className="px-3 py-1 text-xs"
+                >
+                  {endingTurn ? "처리 중" : "턴 종료"}
                 </Button>
               </div>
             </div>
-          ) : null}
+          </Card>
         </Card>
       </main>
 
