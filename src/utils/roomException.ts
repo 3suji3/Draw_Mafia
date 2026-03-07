@@ -65,6 +65,7 @@ export async function leaveRoomAndHandleHost(options: LeaveRoomOptions): Promise
 
   const batch = writeBatch(db);
   const leavingPlayerRef = doc(db, "rooms", roomId, "players", playerId);
+  const isHostLeaving = leavingPlayer.isHost || room.hostId === playerId;
 
   if (room.status === "waiting") {
     batch.delete(leavingPlayerRef);
@@ -75,19 +76,13 @@ export async function leaveRoomAndHandleHost(options: LeaveRoomOptions): Promise
     });
   }
 
-  const remainingPlayers = players.filter((player) => player.id !== playerId);
-
-  if (leavingPlayer.isHost || room.hostId === playerId) {
-    if (remainingPlayers.length > 0) {
-      const nextHost = remainingPlayers[0];
-      batch.update(roomRef, { hostId: nextHost.id });
-      batch.update(doc(db, "rooms", roomId, "players", nextHost.id), { isHost: true });
-    } else {
-      batch.update(roomRef, {
-        status: "ended",
-        resultMessage: "모든 플레이어가 이탈하여 게임이 종료되었습니다.",
-      });
-    }
+  if (isHostLeaving) {
+    batch.update(roomRef, {
+      status: "ended",
+      endedByHostLeave: true,
+      resultMessage: "방장이 퇴장하여 방이 종료되었습니다.",
+      awaitingMafiaGuess: false,
+    });
   }
 
   await batch.commit();

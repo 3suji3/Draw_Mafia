@@ -67,12 +67,13 @@ export default function RoomPage({ params }: RoomPageProps) {
   const [startingGame, setStartingGame] = useState(false);
   const [recoveringPlayer, setRecoveringPlayer] = useState(false);
   const [leavingRoom, setLeavingRoom] = useState(false);
-  const [sharingRoomLink, setSharingRoomLink] = useState(false);
+  const [copyingRoomCode, setCopyingRoomCode] = useState(false);
   const [networkDelayed, setNetworkDelayed] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [toasts, setToasts] = useState<Array<{ id: string; message: string }>>([]);
   const [dialog, setDialog] = useState<DialogState>(INITIAL_DIALOG);
   const recoveryAttemptedRef = useRef(false);
+  const hostLeaveHandledRef = useRef(false);
   const prevPlayerIdsRef = useRef<string[]>([]);
   const creatingBotsRef = useRef(false);
 
@@ -240,7 +241,17 @@ export default function RoomPage({ params }: RoomPageProps) {
       return;
     }
 
-    if (room.status !== "waiting") {
+    if (room.status === "ended") {
+      if (room.endedByHostLeave && !hostLeaveHandledRef.current) {
+        hostLeaveHandledRef.current = true;
+        openDialog("방 종료", "방장이 나가서 방이 종료되었습니다. 홈으로 이동합니다.");
+      }
+
+      router.push("/");
+      return;
+    }
+
+    if (room.status === "playing" || room.status === "voting" || room.status === "result") {
       router.push(`/game/${resolvedRoomId}${testQuerySuffix}`);
     }
   }, [resolvedRoomId, room, router, testQuerySuffix]);
@@ -445,26 +456,24 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
   };
 
-  const handleShareRoomLink = async () => {
-    if (!resolvedRoomId || sharingRoomLink || typeof window === "undefined") {
+  const handleCopyRoomCode = async () => {
+    if (!resolvedRoomId || copyingRoomCode || typeof window === "undefined") {
       return;
     }
 
-    setSharingRoomLink(true);
+    setCopyingRoomCode(true);
 
     try {
-      const shareUrl = `${window.location.origin}/room/${resolvedRoomId}`;
-
       if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-        await navigator.clipboard.writeText(shareUrl);
-        pushToast("방 링크를 복사했습니다.");
+        await navigator.clipboard.writeText(resolvedRoomId);
+        pushToast("방 코드를 복사했습니다.");
       } else {
-        openDialog("링크 공유", `복사 지원이 없어 링크를 직접 전달해주세요.\n${shareUrl}`);
+        openDialog("방 코드", `복사 지원이 없어 방 코드를 직접 전달해주세요.\n${resolvedRoomId}`);
       }
     } catch {
-      openDialog("공유 실패", "링크 공유 중 문제가 발생했습니다. 다시 시도해주세요.");
+      openDialog("복사 실패", "방 코드 복사 중 문제가 발생했습니다. 다시 시도해주세요.");
     } finally {
-      setSharingRoomLink(false);
+      setCopyingRoomCode(false);
     }
   };
 
@@ -490,12 +499,12 @@ export default function RoomPage({ params }: RoomPageProps) {
               </span>
               <Button
                 type="button"
-                onClick={handleShareRoomLink}
-                disabled={sharingRoomLink}
+                onClick={handleCopyRoomCode}
+                disabled={copyingRoomCode}
                 variant="ghost"
                 className="px-3 py-1 text-xs"
               >
-                {sharingRoomLink ? "공유 중..." : "링크 공유"}
+                {copyingRoomCode ? "복사 중..." : "방코드 복사"}
               </Button>
             </div>
           </div>

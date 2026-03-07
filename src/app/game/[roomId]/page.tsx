@@ -122,6 +122,7 @@ export default function GamePage({ params }: GamePageProps) {
   const [continuingRound, setContinuingRound] = useState(false);
   const [submittingGuess, setSubmittingGuess] = useState(false);
   const [mafiaGuessWord, setMafiaGuessWord] = useState("");
+  const [clearingCanvas, setClearingCanvas] = useState(false);
   const [leavingRoom, setLeavingRoom] = useState(false);
   const [restartingGame, setRestartingGame] = useState(false);
   const [networkDelayed, setNetworkDelayed] = useState(false);
@@ -141,6 +142,7 @@ export default function GamePage({ params }: GamePageProps) {
   const autoContinuedRoundKeyRef = useRef<string>("");
   const previousEliminatedRef = useRef<string | null>(null);
   const previousWinnerDialogKeyRef = useRef<string>("");
+  const hostLeaveHandledRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
 
   const { isTestMode, testQuerySuffix } = useMemo(
@@ -600,6 +602,26 @@ export default function GamePage({ params }: GamePageProps) {
     await advanceTurn();
   };
 
+  const handleClearCanvas = async () => {
+    if (!resolvedRoomId || room?.status !== "playing" || !isMyTurn || clearingCanvas) {
+      return;
+    }
+
+    setClearingCanvas(true);
+
+    try {
+      await clearRoomSubcollection(resolvedRoomId, "drawings");
+      pushToast("캔버스를 전체 지웠습니다.");
+    } catch {
+      setVoteResultDialog({
+        open: true,
+        message: "캔버스 전체 지우기 중 오류가 발생했습니다.",
+      });
+    } finally {
+      setClearingCanvas(false);
+    }
+  };
+
   const handleCastVote = async (targetId: string) => {
     if (!room || room.status !== "voting" || !resolvedRoomId || !isAlive || submittingVote || myVote) {
       return;
@@ -962,6 +984,26 @@ export default function GamePage({ params }: GamePageProps) {
       window.clearTimeout(timeoutId);
     };
   }, [currentPlayer, resolvedRoomId, room, router, testQuerySuffix]);
+
+  useEffect(() => {
+    if (!room || room.status !== "ended" || !room.endedByHostLeave || hostLeaveHandledRef.current) {
+      return;
+    }
+
+    hostLeaveHandledRef.current = true;
+    setVoteResultDialog({
+      open: true,
+      message: "방장이 퇴장하여 방이 종료되었습니다. 홈으로 이동합니다.",
+    });
+
+    const timeoutId = window.setTimeout(() => {
+      router.push("/");
+    }, 1200);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [room, router]);
 
   useEffect(() => {
     if (!room) {
@@ -1423,7 +1465,16 @@ export default function GamePage({ params }: GamePageProps) {
               />
             </div>
 
-            <div className="mt-4 flex justify-end">
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                type="button"
+                onClick={handleClearCanvas}
+                disabled={!isMyTurn || room?.status !== "playing" || clearingCanvas}
+                variant="ghost"
+                className="px-4 py-2 text-sm"
+              >
+                {clearingCanvas ? "지우는 중..." : "전체 지우기"}
+              </Button>
               <Button
                 type="button"
                 onClick={handleEndTurn}

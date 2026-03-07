@@ -24,6 +24,7 @@ export type Room = {
   resultMessage?: string;
   winner?: "mafia" | "citizen" | null;
   awaitingMafiaGuess?: boolean;
+  endedByHostLeave?: boolean;
 };
 
 export type Player = {
