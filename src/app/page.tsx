@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   collection,
@@ -14,7 +14,7 @@ import { GameDialog } from "@/components/modals/GameDialog";
 import { Button, Card, LoadingSpinner } from "@/components/ui";
 import { PLAYER_LIMITS, DRAW_TIME_OPTIONS, VOTE_TIME_SECONDS } from "@/constants/game";
 import { db } from "@/firebase/firebase";
-import { getOrCreatePlayerId, persistPlayerContext } from "@/utils/player";
+import { getOrCreatePlayerId, getStoredNickname, persistPlayerContext } from "@/utils/player";
 import { generateRoomCode, normalizeRoomCode } from "@/utils/roomCode";
 import type { Room, Player } from "@/types/room";
 
@@ -39,6 +39,14 @@ export default function HomePage() {
   const [roomCodeInput, setRoomCodeInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [dialog, setDialog] = useState<DialogState>(INITIAL_DIALOG);
+
+  useEffect(() => {
+    const storedNickname = getStoredNickname();
+
+    if (storedNickname) {
+      setNickname(storedNickname);
+    }
+  }, []);
 
   const openDialog = (title: string, description: string) => {
     setDialog({ open: true, title, description });

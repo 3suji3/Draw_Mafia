@@ -15,6 +15,21 @@ type CanvasBoardProps = {
 const CANVAS_WIDTH = 960;
 const CANVAS_HEIGHT = 540;
 
+function resolveCanvasBackgroundColor(): string {
+  if (typeof window === "undefined") {
+    return "rgb(17 24 39)";
+  }
+
+  const raw = getComputedStyle(document.documentElement).getPropertyValue("--dm-card").trim();
+
+  if (!raw) {
+    return "rgb(17 24 39)";
+  }
+
+  const isRgbTriplet = /^\d+\s+\d+\s+\d+$/.test(raw);
+  return isRgbTriplet ? `rgb(${raw})` : raw;
+}
+
 function drawStroke(
   context: CanvasRenderingContext2D,
   stroke: Pick<Stroke, "tool" | "color" | "size" | "points">,
@@ -56,10 +71,7 @@ export function CanvasBoard({
     [activePoints, color, size, tool]
   );
 
-  const canvasBackgroundColor =
-    typeof window === "undefined"
-      ? "#111827"
-      : getComputedStyle(document.documentElement).getPropertyValue("--dm-card").trim() || "#111827";
+  const canvasBackgroundColor = resolveCanvasBackgroundColor();
 
   useEffect(() => {
     const canvas = canvasRef.current;
