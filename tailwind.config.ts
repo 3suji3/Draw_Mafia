@@ -10,13 +10,13 @@ const config: Config = {
     extend: {
       colors: {
         dm: {
-          bg: "#0f0f13",
-          card: "#18181f",
-          accent: "#6c63ff",
-          secondary: "#ff6584",
+          bg: "rgb(var(--dm-bg) / <alpha-value>)",
+          card: "rgb(var(--dm-card) / <alpha-value>)",
+          accent: "rgb(var(--dm-accent) / <alpha-value>)",
+          secondary: "rgb(var(--dm-secondary) / <alpha-value>)",
           text: {
-            primary: "#ffffff",
-            secondary: "#a1a1aa",
+            primary: "rgb(var(--dm-text-primary) / <alpha-value>)",
+            secondary: "rgb(var(--dm-text-secondary) / <alpha-value>)",
           },
         },
       },

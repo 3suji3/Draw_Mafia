@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Space_Grotesk } from "next/font/google";
+import { ThemeToggle } from "@/components/ui";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -19,7 +20,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body className={spaceGrotesk.className}>{children}</body>
+      <body className={spaceGrotesk.className}>
+        <ThemeToggle />
+        {children}
+      </body>
     </html>
   );
 }

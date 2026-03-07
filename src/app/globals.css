@@ -3,7 +3,23 @@
 @tailwind utilities;
 
 :root {
+  --dm-bg: 15 15 19;
+  --dm-card: 24 24 31;
+  --dm-accent: 108 99 255;
+  --dm-secondary: 255 101 132;
+  --dm-text-primary: 255 255 255;
+  --dm-text-secondary: 161 161 170;
   color-scheme: dark;
+}
+
+html.light {
+  --dm-bg: 245 245 252;
+  --dm-card: 255 255 255;
+  --dm-accent: 108 99 255;
+  --dm-secondary: 255 101 132;
+  --dm-text-primary: 26 26 36;
+  --dm-text-secondary: 92 92 112;
+  color-scheme: light;
 }
 
 body {
