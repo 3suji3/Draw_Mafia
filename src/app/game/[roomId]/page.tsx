@@ -136,6 +136,7 @@ export default function GamePage({ params }: GamePageProps) {
   const previousTurnKeyRef = useRef<string>("");
   const previousVoteCountRef = useRef(0);
   const botAutoTurnKeyRef = useRef<string>("");
+  const autoContinuedRoundKeyRef = useRef<string>("");
   const previousEliminatedRef = useRef<string | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -869,6 +870,37 @@ export default function GamePage({ params }: GamePageProps) {
     });
   }, [allVotesCompleted, finalizingVote, isHost, room, voteRemainingSeconds]);
 
+  useEffect(() => {
+    if (
+      !room ||
+      room.status !== "result" ||
+      !isHost ||
+      room.winner ||
+      room.awaitingMafiaGuess ||
+      continuingRound
+    ) {
+      return;
+    }
+
+    const roundKey = `${room.round}-${room.status}`;
+
+    if (autoContinuedRoundKeyRef.current === roundKey) {
+      return;
+    }
+
+    autoContinuedRoundKeyRef.current = roundKey;
+
+    const timeoutId = window.setTimeout(() => {
+      void handleContinueRound().catch(() => {
+        autoContinuedRoundKeyRef.current = "";
+      });
+    }, 1800);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [continuingRound, isHost, room]);
+
   const colorPalette = [
     "#f8fafc",
     "#ef4444",
@@ -1464,14 +1496,13 @@ export default function GamePage({ params }: GamePageProps) {
 
               {!room.awaitingMafiaGuess && !room.winner ? (
                 <div className="mt-4 flex justify-end">
-                  <Button
-                    type="button"
-                    onClick={handleContinueRound}
-                    disabled={!isHost || continuingRound}
-                    className="px-4 py-2 text-sm"
-                  >
-                    {continuingRound ? "준비 중..." : "다음 라운드"}
-                  </Button>
+                  <p className="rounded-md border border-dm-accent/30 bg-dm-accent/10 px-3 py-2 text-sm text-dm-text-secondary">
+                    {isHost
+                      ? continuingRound
+                        ? "다음 라운드 자동 전환 중..."
+                        : "잠시 후 다음 라운드로 자동 전환됩니다."
+                      : "방장이 다음 라운드로 자동 전환합니다."}
+                  </p>
                 </div>
               ) : null}
             </div>

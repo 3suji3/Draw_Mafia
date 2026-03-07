@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   collection,
@@ -17,6 +18,7 @@ import { db } from "@/firebase/firebase";
 import { getOrCreatePlayerId, getStoredNickname, persistPlayerContext } from "@/utils/player";
 import { generateRoomCode, normalizeRoomCode } from "@/utils/roomCode";
 import type { Room, Player } from "@/types/room";
+import mafiaImage from "@/public/mafia.jpg";
 
 const DEFAULT_DRAW_TIME = DRAW_TIME_OPTIONS[0];
 const MAX_ROOM_CODE_RETRY = 10;
@@ -223,17 +225,70 @@ export default function HomePage() {
 
   return (
     <>
-      <main className="min-h-screen bg-dm-bg px-4 py-8 text-dm-text-primary sm:px-6 sm:py-10">
-        <Card className="mx-auto w-full max-w-4xl p-5 sm:p-8" hover>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-4xl font-semibold tracking-tight">DRAW MAFIA</h1>
-            <span className="rounded-md border border-dm-accent/40 px-3 py-1 text-xs text-dm-text-secondary">
-              ONLINE LOBBY
-            </span>
-          </div>
-          <p className="mt-3 text-dm-text-subtext font-medium">닉네임을 입력하고 작전을 시작하세요.</p>
+      <main className="relative min-h-screen overflow-hidden bg-dm-bg px-4 py-8 text-dm-text-primary sm:px-6 sm:py-10">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute -left-12 top-16 h-56 w-56 rounded-full bg-dm-primary/20 blur-3xl" />
+          <div className="absolute right-0 top-4 h-72 w-72 rounded-full bg-dm-secondary/20 blur-3xl" />
+          <div className="absolute bottom-10 left-1/3 h-60 w-60 rounded-full bg-dm-accent/20 blur-3xl" />
+        </div>
 
-          <Card className="mt-8 space-y-5 border-dm-primary/15 bg-dm-bg/35 p-4 sm:p-5">
+        <Card className="relative mx-auto w-full max-w-5xl space-y-6 p-5 sm:p-8" hover>
+          <Card className="border-dm-accent/25 bg-dm-bg/45 p-3 sm:p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="overflow-hidden rounded-lg border border-dm-accent/35">
+                  <Image
+                    src={mafiaImage}
+                    alt="메인 로비 아트"
+                    width={44}
+                    height={44}
+                    className="h-11 w-11 object-cover"
+                    priority
+                  />
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-dm-text-secondary">Main Lobby</p>
+                  <p className="text-sm font-semibold text-dm-text-primary">DRAW MAFIA Command Center</p>
+                </div>
+              </div>
+              <span className="rounded-full border border-dm-accent/40 bg-dm-accent/10 px-3 py-1 text-[11px] font-semibold text-dm-accent animate-pulse">
+                ONLINE
+              </span>
+            </div>
+          </Card>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+            <Card className="border-dm-primary/20 bg-dm-bg/40 p-5 lg:col-span-3" hover>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full border border-dm-secondary/45 bg-dm-secondary/10 px-2 py-0.5 text-xs text-dm-secondary">
+                  MAIN SCREEN
+                </span>
+                <span className="rounded-full border border-dm-accent/45 bg-dm-accent/10 px-2 py-0.5 text-xs text-dm-accent">
+                  READY TO PLAY
+                </span>
+              </div>
+              <h1 className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl">
+                DRAW MAFIA
+                <span className="block bg-gradient-to-r from-dm-primary via-dm-secondary to-dm-accent bg-clip-text text-transparent">
+                  MAIN LOBBY
+                </span>
+              </h1>
+              <p className="mt-4 text-sm font-medium text-dm-text-subtext sm:text-base">
+                닉네임을 입력하고 바로 방을 생성하거나, 코드로 입장해 라운드를 시작하세요.
+              </p>
+            </Card>
+
+            <Card className="border-dm-accent/20 bg-dm-bg/40 p-5 lg:col-span-2" hover>
+              <p className="text-xs uppercase tracking-wider text-dm-text-secondary">Game Info</p>
+              <ul className="mt-3 space-y-2 text-sm text-dm-text-secondary">
+                <li className="rounded-md border border-dm-primary/20 bg-dm-bg/60 px-3 py-2">실시간 멀티플레이 동기화</li>
+                <li className="rounded-md border border-dm-secondary/20 bg-dm-bg/60 px-3 py-2">턴 기반 드로잉 + 즉시 투표 집계</li>
+                <li className="rounded-md border border-dm-accent/20 bg-dm-bg/60 px-3 py-2">동일 닉네임 자동 복원 지원</li>
+              </ul>
+            </Card>
+          </div>
+
+          <Card className="space-y-5 border-dm-primary/15 bg-dm-bg/35 p-4 sm:p-5" hover>
             <label className="block">
               <span className="mb-2 block text-sm font-medium text-dm-text-secondary">닉네임</span>
               <input
