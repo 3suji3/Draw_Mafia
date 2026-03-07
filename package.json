@@ -2,7 +2,8 @@
   "name": "draw-mafia",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "clean:next": "node -e \"require('node:fs').rmSync('.next', { recursive: true, force: true })\"",
+    "dev": "npm run clean:next && next dev --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
