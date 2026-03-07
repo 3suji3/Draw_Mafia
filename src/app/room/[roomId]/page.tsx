@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   collection,
   doc,
@@ -23,10 +23,6 @@ import type { Player, Room } from "@/types/room";
 import { leaveRoomAndHandleHost, validateRoomState } from "@/utils/roomException";
 import { getOrCreatePlayerId, getStoredNickname, getStoredRoomId } from "@/utils/player";
 import { resolveTestMode } from "@/utils/testMode";
-
-type RoomPageProps = {
-  params: { roomId: string };
-};
 
 type DialogState = {
   open: boolean;
@@ -56,10 +52,14 @@ function shuffle<T>(items: T[]): T[] {
   return next;
 }
 
-export default function RoomPage({ params }: RoomPageProps) {
+export default function RoomPage() {
   const router = useRouter();
+  const routeParams = useParams<{ roomId: string }>();
   const searchParams = useSearchParams();
-  const [resolvedRoomId] = useState(params.roomId);
+  const resolvedRoomId = useMemo(
+    () => (typeof routeParams.roomId === "string" ? routeParams.roomId : ""),
+    [routeParams]
+  );
   const [room, setRoom] = useState<Room | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);

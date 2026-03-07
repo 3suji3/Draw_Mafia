@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   addDoc,
   collection,
@@ -25,10 +25,6 @@ import type { Player, Room } from "@/types/room";
 import { leaveRoomAndHandleHost, validateRoomState } from "@/utils/roomException";
 import { getOrCreatePlayerId } from "@/utils/player";
 import { resolveTestMode } from "@/utils/testMode";
-
-type GamePageProps = {
-  params: { roomId: string };
-};
 
 type Vote = {
   voterId: string;
@@ -96,10 +92,14 @@ async function clearRoomSubcollection(roomId: string, subcollection: "drawings" 
   await batch.commit();
 }
 
-export default function GamePage({ params }: GamePageProps) {
+export default function GamePage() {
   const router = useRouter();
+  const routeParams = useParams<{ roomId: string }>();
   const searchParams = useSearchParams();
-  const [resolvedRoomId] = useState(params.roomId);
+  const resolvedRoomId = useMemo(
+    () => (typeof routeParams.roomId === "string" ? routeParams.roomId : ""),
+    [routeParams]
+  );
   const [room, setRoom] = useState<Room | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
