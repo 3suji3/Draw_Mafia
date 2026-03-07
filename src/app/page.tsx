@@ -36,6 +36,28 @@ const INITIAL_DIALOG: DialogState = {
   description: "",
 };
 
+function formatFirestoreError(error: unknown): string {
+  if (error && typeof error === "object" && "code" in error) {
+    const code = String((error as { code: unknown }).code ?? "");
+
+    if (code.includes("permission-denied")) {
+      return "권한 오류(permission-denied): Firestore Rules 또는 Firebase 설정을 확인해주세요.";
+    }
+
+    if (code.includes("unavailable")) {
+      return "네트워크 오류(unavailable): 잠시 후 다시 시도해주세요.";
+    }
+
+    if (code.includes("invalid-argument")) {
+      return "요청 형식 오류(invalid-argument): 입력값을 다시 확인해주세요.";
+    }
+
+    return `오류 코드: ${code}`;
+  }
+
+  return "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.";
+}
+
 export default function HomePage() {
   const router = useRouter();
   const [nickname, setNickname] = useState("");
@@ -116,6 +138,7 @@ export default function HomePage() {
           maxPlayers: PLAYER_LIMITS.max,
           drawTime: DEFAULT_DRAW_TIME,
           voteTime: VOTE_TIME_SECONDS,
+          gameSession: 0,
           round: 1,
           turnIndex: 0,
           turnOrder: [],
@@ -150,8 +173,9 @@ export default function HomePage() {
 
       persistPlayerContext(trimmedNickname, createdRoomId);
       router.push(`/room/${createdRoomId}${testQuerySuffix}`);
-    } catch {
-      openDialog("방 생성 실패", "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+    } catch (error) {
+      console.error("[createRoom] failed", error);
+      openDialog("방 생성 실패", formatFirestoreError(error));
     } finally {
       setIsLoading(false);
     }
@@ -228,8 +252,9 @@ export default function HomePage() {
 
       persistPlayerContext(trimmedNickname, roomId);
       router.push(`/room/${roomId}${testQuerySuffix}`);
-    } catch {
-      openDialog("입장 실패", "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+    } catch (error) {
+      console.error("[joinRoom] failed", error);
+      openDialog("입장 실패", formatFirestoreError(error));
     } finally {
       setIsLoading(false);
     }
