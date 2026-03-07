@@ -12,6 +12,7 @@ const config: Config = {
         dm: {
           bg: "rgb(var(--dm-bg) / <alpha-value>)",
           card: "rgb(var(--dm-card) / <alpha-value>)",
+          border: "rgb(var(--dm-card-border) / <alpha-value>)",
           primary: "rgb(var(--dm-primary) / <alpha-value>)",
           accent: "rgb(var(--dm-accent) / <alpha-value>)",
           secondary: "rgb(var(--dm-secondary) / <alpha-value>)",
@@ -23,8 +24,8 @@ const config: Config = {
         },
       },
       boxShadow: {
-        "dm-soft": "0 10px 30px rgba(0, 0, 0, 0.08)",
-        "dm-glow": "0 0 0 1px rgba(138,125,255,0.45), 0 0 28px rgba(138,125,255,0.25)",
+        "dm-soft": "0 12px 32px rgba(2, 6, 23, 0.32)",
+        "dm-glow": "0 0 0 1px rgba(124,108,255,0.38), 0 0 24px rgba(124,108,255,0.2)",
       },
       keyframes: {
         "fade-in": {

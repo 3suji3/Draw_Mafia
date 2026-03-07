@@ -287,7 +287,7 @@ export default function HomePage() {
                 value={nickname}
                 onChange={(event) => setNickname(event.target.value)}
                 placeholder="닉네임 입력"
-                className="w-full rounded-md border border-dm-accent/30 bg-dm-bg px-3 py-2 text-sm text-dm-text-primary outline-none ring-dm-accent/30 transition focus:ring"
+                className="w-full rounded-md border border-dm-border bg-dm-bg px-3 py-2 text-sm text-dm-text-primary outline-none ring-dm-primary/30 transition focus:ring"
                 maxLength={20}
               />
             </label>
@@ -299,7 +299,7 @@ export default function HomePage() {
                 value={roomCodeInput}
                 onChange={(event) => setRoomCodeInput(normalizeRoomCode(event.target.value))}
                 placeholder="예: AB12CD"
-                className="w-full rounded-md border border-dm-accent/30 bg-dm-bg px-3 py-2 text-sm uppercase text-dm-text-primary outline-none ring-dm-accent/30 transition focus:ring"
+                className="w-full rounded-md border border-dm-border bg-dm-bg px-3 py-2 text-sm uppercase text-dm-text-primary outline-none ring-dm-primary/30 transition focus:ring"
                 maxLength={8}
               />
             </label>

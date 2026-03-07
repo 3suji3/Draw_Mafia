@@ -3,61 +3,88 @@
 @tailwind utilities;
 
 :root {
-  --dm-bg: 11 11 15;
-  --dm-card: 23 23 28;
-  --dm-primary: 77 163 255;
-  --dm-secondary: 138 125 255;
-  --dm-accent: 255 123 156;
+  --dm-bg: 15 17 23;
+  --dm-card: 22 26 35;
+  --dm-card-border: 34 39 51;
+  --dm-primary: 91 140 255;
+  --dm-secondary: 139 124 255;
+  --dm-accent: 139 124 255;
   --dm-text-primary: 255 255 255;
-  --dm-text-secondary: 161 161 170;
-  --dm-text-subtext: 161 161 170;
+  --dm-text-secondary: 161 167 179;
+  --dm-text-subtext: 161 167 179;
+  --dm-card-shadow: 0 12px 32px rgba(2, 6, 23, 0.32);
+  --dm-glow-primary-alpha: 0.16;
+  --dm-glow-accent-alpha: 0.14;
   color-scheme: dark;
 }
 
 html.light {
   --dm-bg: 246 247 251;
   --dm-card: 255 255 255;
-  --dm-primary: 49 130 246;
-  --dm-secondary: 108 99 255;
-  --dm-accent: 255 101 132;
-  --dm-text-primary: 29 29 31;
-  --dm-text-secondary: 110 110 115;
-  --dm-text-subtext: 110 110 115;
+  --dm-card-border: 230 232 239;
+  --dm-primary: 59 130 246;
+  --dm-secondary: 124 108 255;
+  --dm-accent: 124 108 255;
+  --dm-text-primary: 29 31 35;
+  --dm-text-secondary: 107 114 128;
+  --dm-text-subtext: 107 114 128;
+  --dm-card-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+  --dm-glow-primary-alpha: 0.08;
+  --dm-glow-accent-alpha: 0.06;
   color-scheme: light;
 }
 
 body {
-  @apply bg-dm-bg text-dm-text-primary antialiased;
+  @apply text-dm-text-primary antialiased;
+  background-color: rgb(var(--dm-bg));
+  background-image:
+    radial-gradient(
+      900px circle at 14% -8%,
+      rgb(var(--dm-primary) / var(--dm-glow-primary-alpha)),
+      transparent 48%
+    ),
+    radial-gradient(
+      760px circle at 88% 0%,
+      rgb(var(--dm-accent) / var(--dm-glow-accent-alpha)),
+      transparent 52%
+    );
 }
 
 .dm-card {
-  @apply rounded-xl border bg-dm-card p-5 shadow-dm-soft transition duration-200;
-  border-color: rgb(var(--dm-primary) / 0.12);
+  @apply rounded-xl border bg-dm-card p-6 transition duration-200;
+  border-color: rgb(var(--dm-card-border));
+  box-shadow: var(--dm-card-shadow);
 }
 
 .dm-card-hover {
-  @apply hover:-translate-y-[2px] hover:shadow-lg;
+  @apply hover:-translate-y-[2px];
 }
 
 .dm-btn {
-  @apply inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60;
+  @apply inline-flex items-center justify-center text-sm font-semibold transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60;
 }
 
 .dm-btn-primary {
-  @apply dm-btn bg-gradient-to-b from-dm-primary to-dm-secondary text-dm-text-primary hover:brightness-110;
+  @apply dm-btn rounded-xl px-6 py-4 bg-gradient-to-r from-dm-primary to-dm-accent text-dm-text-primary hover:brightness-110;
 }
 
 .dm-btn-secondary {
-  @apply dm-btn bg-gradient-to-b from-dm-secondary to-dm-accent text-dm-text-primary hover:brightness-110;
+  @apply dm-btn rounded-xl px-6 py-4 text-dm-accent border;
+  border-color: rgb(var(--dm-accent) / 0.4);
+  background-color: rgb(var(--dm-accent) / 0.14);
+}
+
+.dm-btn-secondary:hover {
+  background-color: rgb(var(--dm-accent) / 0.22);
 }
 
 .dm-btn-ghost {
-  @apply dm-btn border bg-dm-card text-dm-text-primary;
-  border-color: rgb(var(--dm-primary) / 0.35);
+  @apply dm-btn rounded-xl px-6 py-4 border bg-dm-card text-dm-text-primary;
+  border-color: rgb(var(--dm-card-border));
 }
 
 .dm-btn-ghost:hover {
-  background-color: rgb(var(--dm-primary) / 0.1);
+  background-color: rgb(var(--dm-primary) / 0.08);
 }
 
 .dm-dialog-overlay[data-state="open"] {
