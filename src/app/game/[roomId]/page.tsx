@@ -17,6 +17,7 @@ import {
 } from "firebase/firestore";
 import { CanvasBoard } from "@/components/canvas";
 import { GameDialog } from "@/components/modals/GameDialog";
+import { LoadingSpinner, ToastStack } from "@/components/ui";
 import { db } from "@/firebase/firebase";
 import type { CanvasTool, Stroke } from "@/types/canvas";
 import type { Player, Room } from "@/types/room";
@@ -104,6 +105,7 @@ export default function GamePage({ params }: GamePageProps) {
   const [mafiaGuessWord, setMafiaGuessWord] = useState("");
   const [leavingRoom, setLeavingRoom] = useState(false);
   const [networkDelayed, setNetworkDelayed] = useState(false);
+  const [toasts, setToasts] = useState<Array<{ id: string; message: string }>>([]);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [turnStartedAtMs, setTurnStartedAtMs] = useState<number | null>(null);
@@ -111,6 +113,16 @@ export default function GamePage({ params }: GamePageProps) {
 
   const autoAdvancedTurnKeyRef = useRef<string>("");
   const autoFinalizedVoteKeyRef = useRef<string>("");
+  const previousTurnKeyRef = useRef<string>("");
+  const previousVoteCountRef = useRef(0);
+
+  const pushToast = (message: string) => {
+    const id = crypto.randomUUID();
+    setToasts((prev) => [...prev.slice(-2), { id, message }]);
+    window.setTimeout(() => {
+      setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    }, 2200);
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -752,21 +764,52 @@ export default function GamePage({ params }: GamePageProps) {
     };
   }, [currentPlayer, resolvedRoomId, room, router]);
 
+  useEffect(() => {
+    if (!room) {
+      return;
+    }
+
+    const turnKey = `${room.status}-${room.round}-${room.turnIndex}`;
+
+    if (!previousTurnKeyRef.current) {
+      previousTurnKeyRef.current = turnKey;
+      return;
+    }
+
+    if (previousTurnKeyRef.current !== turnKey && room.status === "playing") {
+      pushToast("다음 턴이 시작되었습니다.");
+    }
+
+    previousTurnKeyRef.current = turnKey;
+  }, [room]);
+
+  useEffect(() => {
+    if (previousVoteCountRef.current === 0 && votedCount === 0) {
+      return;
+    }
+
+    if (votedCount > previousVoteCountRef.current) {
+      pushToast("투표가 등록되었습니다.");
+    }
+
+    previousVoteCountRef.current = votedCount;
+  }, [votedCount]);
+
   return (
     <>
-      <main className="min-h-screen bg-slate-950 px-6 py-10 text-slate-100">
-        <section className="mx-auto w-full max-w-6xl rounded-2xl border border-slate-700 bg-slate-900/90 p-8 shadow-2xl">
+      <main className="min-h-screen bg-dm-bg px-4 py-8 text-dm-text-primary sm:px-6 sm:py-10">
+        <section className="mx-auto w-full max-w-6xl rounded-2xl border border-dm-accent/25 bg-dm-card/90 p-4 shadow-dm-glow sm:p-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h1 className="text-3xl font-bold tracking-wide">DRAW MAFIA</h1>
             <div className="flex items-center gap-3">
-              <span className="rounded-md border border-slate-600 px-3 py-1 text-xs text-slate-300">
+              <span className="rounded-md border border-dm-accent/40 px-3 py-1 text-xs text-dm-text-secondary">
                 ROOM {resolvedRoomId || "-"}
               </span>
               <button
                 type="button"
                 onClick={handleLeaveRoom}
                 disabled={leavingRoom}
-                className="rounded-md border border-rose-600 px-3 py-1 text-xs font-semibold text-rose-200 transition hover:bg-rose-700/30 disabled:opacity-50"
+                className="rounded-md border border-dm-secondary/60 px-3 py-1 text-xs font-semibold text-dm-secondary transition hover:bg-dm-secondary/20 disabled:opacity-50"
               >
                 {leavingRoom ? "나가는 중..." : "방 나가기"}
               </button>
@@ -774,60 +817,66 @@ export default function GamePage({ params }: GamePageProps) {
           </div>
 
           {networkDelayed ? (
-            <p className="mt-3 text-sm text-amber-300">
+            <p className="mt-3 text-sm text-dm-secondary">
               네트워크 지연이 감지되었습니다. 실시간 상태 동기화를 재시도 중입니다.
             </p>
           ) : null}
 
+          {finalizingVote || continuingRound ? (
+            <div className="mt-3">
+              <LoadingSpinner label="데이터 동기화 중..." />
+            </div>
+          ) : null}
+
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <article className="rounded-xl border border-slate-700 bg-slate-800/70 p-5">
-              <h2 className="text-sm font-semibold text-slate-300">내 역할</h2>
-              <p className="mt-2 text-xl font-bold text-emerald-300">
+            <article className="rounded-xl border border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5">
+              <h2 className="text-sm font-semibold text-dm-text-secondary">내 역할</h2>
+              <p className="mt-2 text-xl font-bold text-dm-accent">
                 {currentPlayer?.role === "mafia" ? "마피아" : "시민"}
               </p>
-              <p className="mt-3 text-xs text-slate-400">내 정보만 확인 가능합니다.</p>
+              <p className="mt-3 text-xs text-dm-text-secondary">내 정보만 확인 가능합니다.</p>
             </article>
 
-            <article className="rounded-xl border border-slate-700 bg-slate-800/70 p-5 lg:col-span-2">
-              <h2 className="text-sm font-semibold text-slate-300">내 제시어</h2>
-              <p className="mt-2 text-2xl font-bold text-violet-300">{visiblePrompt || "로딩 중..."}</p>
-              <p className="mt-3 text-xs text-slate-400">
+            <article className="rounded-xl border border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5 lg:col-span-2">
+              <h2 className="text-sm font-semibold text-dm-text-secondary">내 제시어</h2>
+              <p className="mt-2 text-2xl font-bold text-dm-secondary">{visiblePrompt || "로딩 중..."}</p>
+              <p className="mt-3 text-xs text-dm-text-secondary">
                 시민은 전체, 마피아는 행동/피사체 하나만 확인합니다.
               </p>
             </article>
           </div>
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <article className="rounded-xl border border-slate-700 bg-slate-800/70 p-5">
-              <h2 className="text-sm font-semibold text-slate-300">턴 정보</h2>
-              <p className="mt-2 text-sm text-slate-300">현재 턴</p>
-              <p className="text-lg font-semibold text-sky-300">
+            <article className="rounded-xl border border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5">
+              <h2 className="text-sm font-semibold text-dm-text-secondary">턴 정보</h2>
+              <p className="mt-2 text-sm text-dm-text-secondary">현재 턴</p>
+              <p className="text-lg font-semibold text-dm-accent">
                 {currentTurnPlayer?.nickname ?? "대기 중"}
               </p>
-              <p className="mt-3 text-xs text-slate-400">
+              <p className="mt-3 text-xs text-dm-text-secondary">
                 turnIndex: {room?.turnIndex ?? 0} / round: {room?.round ?? 1}
               </p>
 
               {room?.status === "playing" ? (
-                <div className="mt-4 rounded-md border border-slate-700 bg-slate-900/80 p-3">
-                  <p className="text-xs text-slate-400">DRAW TIMER</p>
-                  <p className="mt-1 text-2xl font-bold text-amber-300">{remainingSeconds}s</p>
+                <div className="mt-4 rounded-md border border-dm-accent/30 bg-dm-bg/70 p-3">
+                  <p className="text-xs text-dm-text-secondary">DRAW TIMER</p>
+                  <p className="mt-1 text-2xl font-bold text-dm-accent">{remainingSeconds}s</p>
                 </div>
               ) : null}
 
               {room?.status === "voting" ? (
-                <div className="mt-4 rounded-md border border-rose-800 bg-rose-950/30 p-3">
-                  <p className="text-xs text-rose-300">VOTING TIMER</p>
-                  <p className="mt-1 text-2xl font-bold text-amber-300">{voteRemainingSeconds}s</p>
-                  <p className="mt-1 text-xs text-slate-300">
+                <div className="mt-4 rounded-md border border-dm-secondary/40 bg-dm-bg/70 p-3">
+                  <p className="text-xs text-dm-secondary">VOTING TIMER</p>
+                  <p className="mt-1 text-2xl font-bold text-dm-secondary">{voteRemainingSeconds}s</p>
+                  <p className="mt-1 text-xs text-dm-text-secondary">
                     투표 진행: {votedCount} / {eligibleVoterIds.length}
                   </p>
                 </div>
               ) : null}
             </article>
 
-            <article className="rounded-xl border border-slate-700 bg-slate-800/70 p-5">
-              <h2 className="text-sm font-semibold text-slate-300">턴 순서</h2>
+            <article className="rounded-xl border border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5">
+              <h2 className="text-sm font-semibold text-dm-text-secondary">턴 순서</h2>
               <ol className="mt-3 space-y-2 text-sm">
                 {room?.turnOrder.map((turnPlayerId, index) => {
                   const player = players.find((item) => item.id === turnPlayerId);
@@ -838,11 +887,11 @@ export default function GamePage({ params }: GamePageProps) {
                       key={turnPlayerId}
                       className={`flex items-center justify-between rounded-md border px-3 py-2 ${
                         active
-                          ? "border-indigo-400 bg-indigo-500/20 text-indigo-100"
-                          : "border-slate-700 bg-slate-900 text-slate-300"
+                          ? "border-dm-accent bg-dm-accent/18 text-dm-text-primary shadow-dm-glow"
+                          : "border-dm-accent/20 bg-dm-bg text-dm-text-secondary"
                       }`}
                     >
-                      <span>{index + 1}.</span>
+                      <span>{active ? "◆" : `${index + 1}.`}</span>
                       <span>{player?.nickname ?? "알 수 없음"}</span>
                     </li>
                   );
@@ -851,10 +900,10 @@ export default function GamePage({ params }: GamePageProps) {
             </article>
           </div>
 
-          <div className="mt-6 rounded-xl border border-slate-700 bg-slate-800/70 p-5">
+          <div className="mt-6 rounded-xl border border-dm-accent/20 bg-dm-bg/40 p-4 sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-slate-300">DRAW BOARD</h2>
-              <p className="text-xs text-slate-400">
+              <h2 className="text-sm font-semibold text-dm-text-secondary">DRAW BOARD</h2>
+              <p className="text-xs text-dm-text-secondary">
                 {room?.status === "playing"
                   ? isMyTurn
                     ? "현재 당신의 턴입니다."
@@ -873,8 +922,8 @@ export default function GamePage({ params }: GamePageProps) {
                 onClick={() => setTool("pen")}
                 className={`rounded-md border px-3 py-2 text-sm ${
                   tool === "pen"
-                    ? "border-sky-400 bg-sky-500/20 text-sky-100"
-                    : "border-slate-600 bg-slate-900 text-slate-200"
+                    ? "border-dm-accent bg-dm-accent/20 text-dm-text-primary"
+                    : "border-dm-accent/25 bg-dm-bg text-dm-text-secondary"
                 }`}
               >
                 펜
@@ -884,8 +933,8 @@ export default function GamePage({ params }: GamePageProps) {
                 onClick={() => setTool("eraser")}
                 className={`rounded-md border px-3 py-2 text-sm ${
                   tool === "eraser"
-                    ? "border-rose-400 bg-rose-500/20 text-rose-100"
-                    : "border-slate-600 bg-slate-900 text-slate-200"
+                    ? "border-dm-secondary bg-dm-secondary/20 text-dm-text-primary"
+                    : "border-dm-secondary/30 bg-dm-bg text-dm-text-secondary"
                 }`}
               >
                 지우개
@@ -899,14 +948,14 @@ export default function GamePage({ params }: GamePageProps) {
                     onClick={() => setColor(paletteColor)}
                     title={paletteColor}
                     className={`h-7 w-7 rounded-full border-2 ${
-                      color === paletteColor ? "border-white" : "border-slate-600"
+                      color === paletteColor ? "border-dm-text-primary" : "border-dm-text-secondary"
                     }`}
                     style={{ backgroundColor: paletteColor }}
                   />
                 ))}
               </div>
 
-              <label className="ml-auto flex items-center gap-2 text-xs text-slate-300">
+              <label className="ml-auto flex items-center gap-2 text-xs text-dm-text-secondary">
                 굵기
                 <input
                   type="range"
@@ -935,7 +984,7 @@ export default function GamePage({ params }: GamePageProps) {
                 type="button"
                 onClick={handleEndTurn}
                 disabled={!isMyTurn || endingTurn || room?.status !== "playing"}
-                className="rounded-md bg-indigo-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-400 disabled:cursor-not-allowed disabled:bg-slate-600"
+                className="rounded-md bg-dm-accent px-4 py-2 text-sm font-semibold text-dm-text-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {endingTurn ? "처리 중..." : "턴 종료"}
               </button>
@@ -943,10 +992,10 @@ export default function GamePage({ params }: GamePageProps) {
           </div>
 
           {room?.status === "voting" ? (
-            <div className="mt-6 rounded-xl border border-rose-700 bg-rose-950/30 p-5">
+            <div className="mt-6 rounded-xl border border-dm-secondary/40 bg-dm-bg/45 p-4 sm:p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold text-rose-200">VOTING PHASE</h2>
-                <p className="text-xs text-rose-200">
+                <h2 className="text-sm font-semibold text-dm-secondary">VOTING PHASE</h2>
+                <p className="text-xs text-dm-text-secondary">
                   {isAlive
                     ? myVote
                       ? "이미 투표 완료"
@@ -962,10 +1011,10 @@ export default function GamePage({ params }: GamePageProps) {
                     type="button"
                     onClick={() => handleCastVote(player.id)}
                     disabled={!isAlive || Boolean(myVote) || submittingVote}
-                    className="flex items-center justify-between rounded-md border border-rose-700 bg-slate-900 px-3 py-2 text-sm text-rose-100 transition hover:bg-rose-900/40 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex items-center justify-between rounded-md border border-dm-secondary/40 bg-dm-bg px-3 py-2 text-sm text-dm-text-primary transition hover:bg-dm-secondary/15 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <span>{player.nickname}</span>
-                    <span className="text-xs text-rose-300">투표</span>
+                    <span className="text-xs text-dm-secondary">투표</span>
                   </button>
                 ))}
 
@@ -973,13 +1022,13 @@ export default function GamePage({ params }: GamePageProps) {
                   type="button"
                   onClick={() => handleCastVote(VOTE_SKIP_TARGET)}
                   disabled={!isAlive || Boolean(myVote) || submittingVote}
-                  className="rounded-md border border-amber-600 bg-amber-900/20 px-3 py-2 text-sm font-semibold text-amber-200 transition hover:bg-amber-800/30 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-md border border-dm-accent/40 bg-dm-accent/15 px-3 py-2 text-sm font-semibold text-dm-text-primary transition hover:bg-dm-accent/25 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   넘어가기 투표
                 </button>
               </div>
 
-              <div className="mt-4 rounded-md border border-slate-700 bg-slate-900/70 p-3 text-xs text-slate-300">
+              <div className="mt-4 rounded-md border border-dm-accent/20 bg-dm-bg/70 p-3 text-xs text-dm-text-secondary">
                 {voteResult.shouldEliminate
                   ? `현재 최다 득표: ${players.find((player) => player.id === voteResult.topTargetId)?.nickname ?? "알 수 없음"} (${voteResult.topCount}표)`
                   : "현재 집계: 동률 또는 넘어가기 우세"}
@@ -988,21 +1037,21 @@ export default function GamePage({ params }: GamePageProps) {
           ) : null}
 
           {room?.status === "result" ? (
-            <div className="mt-6 rounded-xl border border-cyan-700 bg-cyan-950/30 p-5">
-              <h2 className="text-sm font-semibold text-cyan-200">RESULT PHASE</h2>
-              <p className="mt-2 text-sm text-cyan-100">{room.resultMessage ?? "결과를 계산 중입니다."}</p>
+            <div className="mt-6 rounded-xl border border-dm-accent/35 bg-dm-bg/45 p-4 sm:p-5">
+              <h2 className="text-sm font-semibold text-dm-accent">RESULT PHASE</h2>
+              <p className="mt-2 text-sm text-dm-text-primary">{room.resultMessage ?? "결과를 계산 중입니다."}</p>
 
               {room.eliminatedPlayerId ? (
-                <p className="mt-2 text-sm text-slate-200">
+                <p className="mt-2 text-sm text-dm-text-secondary">
                   탈락자: {eliminatedPlayer?.nickname ?? "알 수 없음"} / 정체: {room.eliminatedRole ?? "미확인"}
                 </p>
               ) : (
-                <p className="mt-2 text-sm text-slate-200">이번 라운드 탈락자 없음</p>
+                <p className="mt-2 text-sm text-dm-text-secondary">이번 라운드 탈락자 없음</p>
               )}
 
               {room.awaitingMafiaGuess ? (
-                <div className="mt-4 rounded-md border border-violet-700 bg-violet-950/30 p-4">
-                  <p className="text-sm text-violet-200">마피아 제시어 추측 기회</p>
+                <div className="mt-4 rounded-md border border-dm-secondary/40 bg-dm-bg/70 p-4">
+                  <p className="text-sm text-dm-secondary">마피아 제시어 추측 기회</p>
 
                   {currentPlayer?.role === "mafia" ? (
                     <div className="mt-3 flex flex-col gap-3 sm:flex-row">
@@ -1011,19 +1060,19 @@ export default function GamePage({ params }: GamePageProps) {
                         value={mafiaGuessWord}
                         onChange={(event) => setMafiaGuessWord(event.target.value)}
                         placeholder="제시어 전체 입력"
-                        className="w-full rounded-md border border-violet-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none"
+                        className="w-full rounded-md border border-dm-secondary/40 bg-dm-bg px-3 py-2 text-sm text-dm-text-primary outline-none"
                       />
                       <button
                         type="button"
                         onClick={handleMafiaGuessSubmit}
                         disabled={submittingGuess}
-                        className="rounded-md bg-violet-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:bg-slate-600"
+                        className="rounded-md bg-dm-secondary px-4 py-2 text-sm font-semibold text-dm-text-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {submittingGuess ? "확인 중..." : "추측 제출"}
                       </button>
                     </div>
                   ) : (
-                    <p className="mt-3 text-sm text-slate-300">마피아의 추측을 기다리는 중입니다.</p>
+                    <p className="mt-3 text-sm text-dm-text-secondary">마피아의 추측을 기다리는 중입니다.</p>
                   )}
                 </div>
               ) : null}
@@ -1034,7 +1083,7 @@ export default function GamePage({ params }: GamePageProps) {
                     type="button"
                     onClick={handleContinueRound}
                     disabled={!isHost || continuingRound}
-                    className="rounded-md bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-200"
+                    className="rounded-md bg-dm-accent px-4 py-2 text-sm font-semibold text-dm-text-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {continuingRound ? "준비 중..." : "다음 라운드"}
                   </button>
@@ -1044,16 +1093,35 @@ export default function GamePage({ params }: GamePageProps) {
           ) : null}
 
           {room?.status === "ended" ? (
-            <div className="mt-6 rounded-xl border border-emerald-700 bg-emerald-950/30 p-5">
-              <h2 className="text-xl font-bold text-emerald-200">GAME END</h2>
-              <p className="mt-2 text-sm text-emerald-100">
+            <div className="mt-6 rounded-xl border border-dm-secondary/45 bg-dm-bg/50 p-4 sm:p-5">
+              <h2 className="text-xl font-bold text-dm-secondary">GAME END</h2>
+              <p className="mt-2 text-sm text-dm-text-primary">
                 승리 팀: {room.winner === "mafia" ? "마피아" : "시민"}
               </p>
-              <p className="mt-1 text-sm text-slate-200">{room.resultMessage ?? "게임 종료"}</p>
+              <p className="mt-1 text-sm text-dm-text-secondary">{room.resultMessage ?? "게임 종료"}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => router.push("/")}
+                  className="rounded-md bg-dm-accent px-4 py-2 text-sm font-semibold text-dm-text-primary transition hover:brightness-110"
+                >
+                  다시 시작
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLeaveRoom}
+                  disabled={leavingRoom}
+                  className="rounded-md border border-dm-secondary/60 px-4 py-2 text-sm font-semibold text-dm-secondary transition hover:bg-dm-secondary/20 disabled:opacity-60"
+                >
+                  방 나가기
+                </button>
+              </div>
             </div>
           ) : null}
         </section>
       </main>
+
+      <ToastStack items={toasts} />
 
       <GameDialog
         open={startDialogOpen}

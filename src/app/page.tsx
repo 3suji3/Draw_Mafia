@@ -11,6 +11,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { GameDialog } from "@/components/modals/GameDialog";
+import { LoadingSpinner } from "@/components/ui";
 import { PLAYER_LIMITS, DRAW_TIME_OPTIONS, VOTE_TIME_SECONDS } from "@/constants/game";
 import { db } from "@/firebase/firebase";
 import { getOrCreatePlayerId, persistPlayerContext } from "@/utils/player";
@@ -214,47 +215,49 @@ export default function HomePage() {
 
   return (
     <>
-      <main className="min-h-screen bg-slate-950 px-6 py-10 text-slate-100">
-        <section className="mx-auto w-full max-w-4xl rounded-2xl border border-slate-700 bg-slate-900/90 p-8 shadow-2xl">
+      <main className="min-h-screen bg-dm-bg px-4 py-8 text-dm-text-primary sm:px-6 sm:py-10">
+        <section className="mx-auto w-full max-w-4xl rounded-2xl border border-dm-accent/25 bg-dm-card/90 p-5 shadow-dm-glow sm:p-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h1 className="text-4xl font-bold tracking-wider">DRAW MAFIA</h1>
-            <span className="rounded-md border border-slate-600 px-3 py-1 text-xs text-slate-300">
+            <span className="rounded-md border border-dm-accent/40 px-3 py-1 text-xs text-dm-text-secondary">
               ONLINE LOBBY
             </span>
           </div>
-          <p className="mt-3 text-slate-300">닉네임을 입력하고 작전을 시작하세요.</p>
+          <p className="mt-3 text-dm-text-secondary">닉네임을 입력하고 작전을 시작하세요.</p>
 
-          <div className="mt-8 space-y-5 rounded-xl border border-slate-700 bg-slate-800/70 p-5">
+          <div className="mt-8 space-y-5 rounded-xl border border-dm-accent/20 bg-dm-bg/35 p-4 sm:p-5">
             <label className="block">
-              <span className="mb-2 block text-sm font-medium text-slate-200">닉네임</span>
+              <span className="mb-2 block text-sm font-medium text-dm-text-secondary">닉네임</span>
               <input
                 type="text"
                 value={nickname}
                 onChange={(event) => setNickname(event.target.value)}
                 placeholder="닉네임 입력"
-                className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-slate-600 transition focus:ring"
+                className="w-full rounded-md border border-dm-accent/30 bg-dm-bg px-3 py-2 text-sm text-dm-text-primary outline-none ring-dm-accent/30 transition focus:ring"
                 maxLength={20}
               />
             </label>
 
             <label className="block">
-              <span className="mb-2 block text-sm font-medium text-slate-200">방 코드</span>
+              <span className="mb-2 block text-sm font-medium text-dm-text-secondary">방 코드</span>
               <input
                 type="text"
                 value={roomCodeInput}
                 onChange={(event) => setRoomCodeInput(normalizeRoomCode(event.target.value))}
                 placeholder="예: AB12CD"
-                className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm uppercase text-slate-100 outline-none ring-slate-600 transition focus:ring"
+                className="w-full rounded-md border border-dm-accent/30 bg-dm-bg px-3 py-2 text-sm uppercase text-dm-text-primary outline-none ring-dm-accent/30 transition focus:ring"
                 maxLength={8}
               />
             </label>
+
+            {isLoading ? <LoadingSpinner label="매치메이킹 연결 중..." /> : null}
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <button
                 type="button"
                 onClick={createRoom}
                 disabled={isLoading}
-                className="rounded-md bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-400 disabled:cursor-not-allowed disabled:bg-slate-500"
+                className="rounded-md bg-dm-accent px-4 py-2.5 text-sm font-semibold text-dm-text-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isLoading ? "처리 중..." : "방 생성"}
               </button>
@@ -262,7 +265,7 @@ export default function HomePage() {
                 type="button"
                 onClick={joinRoom}
                 disabled={isLoading}
-                className="rounded-md border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-100 transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
+                className="rounded-md border border-dm-secondary/45 bg-dm-bg px-4 py-2.5 text-sm font-semibold text-dm-text-primary transition hover:bg-dm-card disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isLoading ? "처리 중..." : "방 입장"}
               </button>

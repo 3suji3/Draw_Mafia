@@ -3,9 +3,37 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 body {
-  @apply bg-slate-50 text-slate-900;
+  @apply bg-dm-bg text-dm-text-primary antialiased;
+}
+
+.dm-dialog-overlay[data-state="open"] {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.dm-dialog-content[data-state="open"] {
+  animation: slideUp 0.22s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 10px));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
 }

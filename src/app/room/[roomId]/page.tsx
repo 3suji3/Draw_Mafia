@@ -15,6 +15,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { GameDialog } from "@/components/modals/GameDialog";
+import { LoadingSpinner, ToastStack } from "@/components/ui";
 import { PROMPT_POOL } from "@/constants/prompts";
 import { PLAYER_LIMITS, DRAW_TIME_OPTIONS } from "@/constants/game";
 import { db } from "@/firebase/firebase";
@@ -62,11 +63,21 @@ export default function RoomPage({ params }: RoomPageProps) {
   const [recoveringPlayer, setRecoveringPlayer] = useState(false);
   const [leavingRoom, setLeavingRoom] = useState(false);
   const [networkDelayed, setNetworkDelayed] = useState(false);
+  const [toasts, setToasts] = useState<Array<{ id: string; message: string }>>([]);
   const [dialog, setDialog] = useState<DialogState>(INITIAL_DIALOG);
   const recoveryAttemptedRef = useRef(false);
+  const prevPlayerIdsRef = useRef<string[]>([]);
 
   const openDialog = (title: string, description: string) => {
     setDialog({ open: true, title, description });
+  };
+
+  const pushToast = (message: string) => {
+    const id = crypto.randomUUID();
+    setToasts((prev) => [...prev.slice(-2), { id, message }]);
+    window.setTimeout(() => {
+      setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    }, 2400);
   };
 
   useEffect(() => {
@@ -166,6 +177,22 @@ export default function RoomPage({ params }: RoomPageProps) {
   const isHost = Boolean(currentPlayer?.isHost && room?.hostId === currentPlayer.id);
   const totalPlayers = players.length;
   const canStartCount = totalPlayers === PLAYER_LIMITS.testMin || totalPlayers >= PLAYER_LIMITS.min;
+
+  useEffect(() => {
+    const currentIds = players.map((player) => player.id);
+    const previousIds = prevPlayerIdsRef.current;
+
+    if (previousIds.length > 0) {
+      if (currentIds.length > previousIds.length) {
+        pushToast("플레이어가 입장했습니다.");
+      }
+      if (currentIds.length < previousIds.length) {
+        pushToast("플레이어가 퇴장했습니다.");
+      }
+    }
+
+    prevPlayerIdsRef.current = currentIds;
+  }, [players]);
 
   useEffect(() => {
     if (!room || !resolvedRoomId) {
@@ -338,64 +365,70 @@ export default function RoomPage({ params }: RoomPageProps) {
 
   return (
     <>
-      <main className="min-h-screen bg-slate-950 px-6 py-10 text-slate-100">
-        <section className="mx-auto w-full max-w-4xl rounded-2xl border border-slate-700 bg-slate-900/90 p-8 shadow-2xl">
+      <main className="min-h-screen bg-dm-bg px-4 py-8 text-dm-text-primary sm:px-6 sm:py-10">
+        <section className="mx-auto w-full max-w-4xl rounded-2xl border border-dm-accent/25 bg-dm-card/90 p-5 shadow-dm-glow sm:p-8">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h1 className="text-3xl font-bold tracking-wide">LOBBY</h1>
-            <span className="rounded-md border border-slate-600 px-3 py-1 text-xs text-slate-300">
+            <span className="rounded-md border border-dm-accent/40 px-3 py-1 text-xs text-dm-text-secondary">
               ROOM {resolvedRoomId || "-"}
             </span>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 gap-3 rounded-xl border border-slate-700 bg-slate-800/70 p-4 text-sm sm:grid-cols-3">
+          <div className="mt-6 grid grid-cols-1 gap-3 rounded-xl border border-dm-accent/20 bg-dm-bg/35 p-4 text-sm sm:grid-cols-3">
             <p>
-              상태: <span className="font-semibold text-emerald-300">{room?.status ?? "loading"}</span>
+              상태: <span className="font-semibold text-dm-accent">{room?.status ?? "loading"}</span>
             </p>
             <p>
-              인원: <span className="font-semibold text-sky-300">{totalPlayers}</span> / {room?.maxPlayers ?? PLAYER_LIMITS.max}
+              인원: <span className="font-semibold text-dm-secondary">{totalPlayers}</span> / {room?.maxPlayers ?? PLAYER_LIMITS.max}
             </p>
             <p>
-              내 상태: <span className="font-semibold text-violet-300">{currentPlayer ? "입장됨" : "미확인"}</span>
+              내 상태: <span className="font-semibold text-dm-text-primary">{currentPlayer ? "입장됨" : "미확인"}</span>
             </p>
           </div>
 
           {joinedRoomId && joinedRoomId !== resolvedRoomId ? (
-            <p className="mt-3 text-sm text-amber-300">
+            <p className="mt-3 text-sm text-dm-secondary">
               저장된 최근 방 코드({joinedRoomId})와 현재 방 코드가 다릅니다.
             </p>
           ) : null}
 
           {networkDelayed ? (
-            <p className="mt-3 text-sm text-amber-300">네트워크 지연이 감지되었습니다. 연결 복구를 시도 중입니다.</p>
+            <p className="mt-3 text-sm text-dm-secondary">네트워크 지연이 감지되었습니다. 연결 복구를 시도 중입니다.</p>
           ) : null}
 
           {recoveringPlayer ? (
-            <p className="mt-3 text-sm text-cyan-300">새로고침 복구를 진행 중입니다...</p>
+            <div className="mt-3">
+              <LoadingSpinner label="새로고침 복구를 진행 중입니다..." />
+            </div>
           ) : null}
 
           <div className="mt-8">
-            <h2 className="text-lg font-semibold text-slate-100">참가자 목록</h2>
+            <h2 className="text-lg font-semibold text-dm-text-primary">참가자 목록</h2>
             <ul className="mt-3 space-y-2">
               {players.map((player) => (
                 <li
                   key={player.id}
-                  className="flex items-center justify-between rounded-md border border-slate-700 bg-slate-800/70 px-4 py-2 text-sm"
+                  className={`flex items-center justify-between rounded-md border px-4 py-2 text-sm ${
+                    player.isHost
+                      ? "border-dm-accent/60 bg-dm-accent/10 shadow-dm-glow"
+                      : "border-dm-accent/20 bg-dm-bg/50"
+                  }`}
                 >
-                  <span className="font-medium text-slate-100">{player.nickname}</span>
-                  <span className="text-xs text-slate-400">
+                  <span className="font-medium text-dm-text-primary">{player.nickname}</span>
+                  <span className="text-xs text-dm-text-secondary">
                     {player.isHost ? "방장" : "참가자"}
                   </span>
                 </li>
               ))}
             </ul>
             {!loading && players.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-400">아직 참가자가 없습니다.</p>
+              <p className="mt-3 text-sm text-dm-text-secondary">아직 참가자가 없습니다.</p>
             ) : null}
           </div>
 
-          <div className="mt-8 rounded-xl border border-slate-700 bg-slate-800/70 p-4">
-            <h2 className="text-base font-semibold text-slate-100">라운드 설정</h2>
-            <p className="mt-1 text-sm text-slate-300">방장만 drawTime을 변경할 수 있습니다.</p>
+          <div className="mt-8 rounded-xl border border-dm-accent/20 bg-dm-bg/35 p-4">
+            <h2 className="text-base font-semibold text-dm-text-primary">라운드 설정</h2>
+            <p className="mt-1 text-sm text-dm-text-secondary">방장만 drawTime을 변경할 수 있습니다.</p>
 
             <div className="mt-4 flex gap-2">
               {DRAW_TIME_OPTIONS.map((seconds) => {
@@ -409,8 +442,8 @@ export default function RoomPage({ params }: RoomPageProps) {
                     disabled={!isHost || updatingDrawTime}
                     className={`rounded-md border px-3 py-2 text-sm transition ${
                       active
-                        ? "border-emerald-400 bg-emerald-500/25 text-emerald-200"
-                        : "border-slate-600 bg-slate-900 text-slate-200 hover:bg-slate-700"
+                        ? "border-dm-accent bg-dm-accent/20 text-dm-text-primary"
+                        : "border-dm-accent/25 bg-dm-bg text-dm-text-secondary hover:bg-dm-card"
                     } disabled:cursor-not-allowed disabled:opacity-50`}
                   >
                     {seconds}초
@@ -421,25 +454,31 @@ export default function RoomPage({ params }: RoomPageProps) {
           </div>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-slate-300">
+            <p className="text-sm text-dm-text-secondary">
               시작 조건: {PLAYER_LIMITS.min}명 이상, 테스트 모드 {PLAYER_LIMITS.testMin}명 허용
             </p>
             <button
               type="button"
               onClick={handleStartClick}
               disabled={!isHost || !canStartCount || startingGame}
-              className="rounded-md bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-400 disabled:cursor-not-allowed disabled:bg-slate-500"
+              className="rounded-md bg-dm-accent px-5 py-2.5 text-sm font-semibold text-dm-text-primary transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {startingGame ? "시작 중..." : "게임 시작"}
             </button>
           </div>
+
+          {startingGame ? (
+            <div className="mt-4">
+              <LoadingSpinner label="게임 시작 데이터를 동기화하는 중..." />
+            </div>
+          ) : null}
 
           <div className="mt-6">
             <div className="flex items-center gap-4">
               <button
                 type="button"
                 onClick={() => router.push("/")}
-                className="text-sm text-slate-400 underline underline-offset-4"
+                className="text-sm text-dm-text-secondary underline underline-offset-4"
               >
                 홈으로 돌아가기
               </button>
@@ -447,7 +486,7 @@ export default function RoomPage({ params }: RoomPageProps) {
                 type="button"
                 onClick={handleLeaveRoom}
                 disabled={leavingRoom}
-                className="text-sm text-rose-300 underline underline-offset-4 disabled:opacity-50"
+                className="text-sm text-dm-secondary underline underline-offset-4 disabled:opacity-50"
               >
                 {leavingRoom ? "이탈 처리 중..." : "방 나가기"}
               </button>
@@ -455,6 +494,8 @@ export default function RoomPage({ params }: RoomPageProps) {
           </div>
         </section>
       </main>
+
+      <ToastStack items={toasts} />
 
       <GameDialog
         open={dialog.open}
