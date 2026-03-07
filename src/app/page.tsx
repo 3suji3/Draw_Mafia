@@ -131,7 +131,7 @@ export default function HomePage() {
           continue;
         }
 
-        const roomPayload: Room = {
+        const roomPayload = {
           id: nextRoomId,
           hostId: playerId,
           status: "waiting",
