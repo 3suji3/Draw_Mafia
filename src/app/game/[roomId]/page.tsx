@@ -13,6 +13,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { CanvasBoard } from "@/components/canvas";
 import { GameDialog } from "@/components/modals/GameDialog";
@@ -24,10 +25,6 @@ import { getOrCreatePlayerId } from "@/utils/player";
 type GamePageProps = {
   params: Promise<{ roomId: string }>;
 };
-
-const TIMER_STORAGE_PREFIX = "draw_mafia_turn_started";
-const VOTE_TIMER_STORAGE_PREFIX = "draw_mafia_vote_started";
-const VOTE_SKIP_TARGET = "skip";
 
 type Vote = {
   voterId: string;
@@ -41,6 +38,10 @@ type VoteResult = {
   isSkipTop: boolean;
   shouldEliminate: boolean;
 };
+
+const TIMER_STORAGE_PREFIX = "draw_mafia_turn_started";
+const VOTE_TIMER_STORAGE_PREFIX = "draw_mafia_vote_started";
+const VOTE_SKIP_TARGET = "skip";
 
 function getTurnTimerKey(roomId: string, round: number, turnIndex: number): string {
   return `${TIMER_STORAGE_PREFIX}_${roomId}_${round}_${turnIndex}`;
@@ -56,6 +57,26 @@ function isMafiaHintAction(roomId: string, mafiaId: string, round: number): bool
   return total % 2 === 0;
 }
 
+function normalizeText(text: string): string {
+  return text.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+async function clearRoomSubcollection(roomId: string, subcollection: "drawings" | "votes") {
+  const snapshot = await getDocs(collection(db, "rooms", roomId, subcollection));
+
+  if (snapshot.empty) {
+    return;
+  }
+
+  const batch = writeBatch(db);
+
+  snapshot.docs.forEach((item) => {
+    batch.delete(item.ref);
+  });
+
+  await batch.commit();
+}
+
 export default function GamePage({ params }: GamePageProps) {
   const router = useRouter();
   const [resolvedRoomId, setResolvedRoomId] = useState("");
@@ -63,20 +84,28 @@ export default function GamePage({ params }: GamePageProps) {
   const [players, setPlayers] = useState<Player[]>([]);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [votes, setVotes] = useState<Vote[]>([]);
+
   const [startDialogOpen, setStartDialogOpen] = useState(true);
-  const [tool, setTool] = useState<CanvasTool>("pen");
-  const [color, setColor] = useState("#f8fafc");
-  const [size, setSize] = useState(4);
-  const [endingTurn, setEndingTurn] = useState(false);
-  const [submittingVote, setSubmittingVote] = useState(false);
-  const [finalizingVote, setFinalizingVote] = useState(false);
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  const [turnStartedAtMs, setTurnStartedAtMs] = useState<number | null>(null);
-  const [voteStartedAtMs, setVoteStartedAtMs] = useState<number | null>(null);
   const [voteResultDialog, setVoteResultDialog] = useState<{ open: boolean; message: string }>({
     open: false,
     message: "",
   });
+
+  const [tool, setTool] = useState<CanvasTool>("pen");
+  const [color, setColor] = useState("#f8fafc");
+  const [size, setSize] = useState(4);
+
+  const [endingTurn, setEndingTurn] = useState(false);
+  const [submittingVote, setSubmittingVote] = useState(false);
+  const [finalizingVote, setFinalizingVote] = useState(false);
+  const [continuingRound, setContinuingRound] = useState(false);
+  const [submittingGuess, setSubmittingGuess] = useState(false);
+  const [mafiaGuessWord, setMafiaGuessWord] = useState("");
+
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [turnStartedAtMs, setTurnStartedAtMs] = useState<number | null>(null);
+  const [voteStartedAtMs, setVoteStartedAtMs] = useState<number | null>(null);
+
   const autoAdvancedTurnKeyRef = useRef<string>("");
   const autoFinalizedVoteKeyRef = useRef<string>("");
 
@@ -106,6 +135,11 @@ export default function GamePage({ params }: GamePageProps) {
       collection(db, "rooms", resolvedRoomId, "players"),
       orderBy("joinedAt", "asc")
     );
+    const drawingsRef = query(
+      collection(db, "rooms", resolvedRoomId, "drawings"),
+      orderBy("createdAt", "asc")
+    );
+    const votesRef = collection(db, "rooms", resolvedRoomId, "votes");
 
     const unsubscribeRoom = onSnapshot(roomRef, (snapshot) => {
       if (!snapshot.exists()) {
@@ -120,13 +154,6 @@ export default function GamePage({ params }: GamePageProps) {
       const nextPlayers = snapshot.docs.map((item) => item.data() as Player);
       setPlayers(nextPlayers);
     });
-
-    const drawingsRef = query(
-      collection(db, "rooms", resolvedRoomId, "drawings"),
-      orderBy("createdAt", "asc")
-    );
-
-    const votesRef = collection(db, "rooms", resolvedRoomId, "votes");
 
     const unsubscribeDrawings = onSnapshot(drawingsRef, (snapshot) => {
       const nextStrokes = snapshot.docs.map((item) => {
@@ -174,16 +201,53 @@ export default function GamePage({ params }: GamePageProps) {
   const isHost = Boolean(currentPlayer?.isHost && room?.hostId === currentPlayer?.id);
   const isAlive = Boolean(currentPlayer?.alive);
 
-  const colorPalette = [
-    "#f8fafc",
-    "#ef4444",
-    "#22c55e",
-    "#3b82f6",
-    "#eab308",
-    "#ec4899",
-    "#f97316",
-    "#a855f7",
-  ];
+  const alivePlayers = useMemo(() => players.filter((player) => player.alive), [players]);
+  const eligibleVoterIds = useMemo(() => alivePlayers.map((player) => player.id), [alivePlayers]);
+  const myVote = useMemo(() => votes.find((vote) => vote.voterId === playerId), [playerId, votes]);
+
+  const votedCount = useMemo(() => {
+    const eligibleSet = new Set(eligibleVoterIds);
+    return votes.filter((vote) => eligibleSet.has(vote.voterId)).length;
+  }, [eligibleVoterIds, votes]);
+
+  const allVotesCompleted = eligibleVoterIds.length > 0 && votedCount >= eligibleVoterIds.length;
+
+  const voteResult = useMemo<VoteResult>(() => {
+    const tally = new Map<string, number>();
+    const eligibleSet = new Set(eligibleVoterIds);
+
+    votes.forEach((vote) => {
+      if (!eligibleSet.has(vote.voterId)) {
+        return;
+      }
+
+      tally.set(vote.targetId, (tally.get(vote.targetId) ?? 0) + 1);
+    });
+
+    if (tally.size === 0) {
+      return {
+        topTargetId: VOTE_SKIP_TARGET,
+        topCount: 0,
+        isTie: false,
+        isSkipTop: true,
+        shouldEliminate: false,
+      };
+    }
+
+    const sorted = Array.from(tally.entries()).sort((left, right) => right[1] - left[1]);
+    const [topTargetId, topCount] = sorted[0];
+    const secondCount = sorted[1]?.[1] ?? -1;
+    const isTie = topCount === secondCount;
+    const isSkipTop = topTargetId === VOTE_SKIP_TARGET;
+
+    return {
+      topTargetId,
+      topCount,
+      isTie,
+      isSkipTop,
+      shouldEliminate: !isTie && !isSkipTop,
+    };
+  }, [eligibleVoterIds, votes]);
 
   const visiblePrompt = useMemo(() => {
     if (!room || !currentPlayer) {
@@ -220,58 +284,6 @@ export default function GamePage({ params }: GamePageProps) {
     const elapsed = Math.floor((nowMs - voteStartedAtMs) / 1000);
     return Math.max(0, (room.voteTime ?? 60) - elapsed);
   }, [nowMs, room, voteStartedAtMs]);
-
-  const alivePlayers = useMemo(() => players.filter((player) => player.alive), [players]);
-  const eligibleVoterIds = useMemo(() => alivePlayers.map((player) => player.id), [alivePlayers]);
-  const myVote = useMemo(
-    () => votes.find((vote) => vote.voterId === playerId),
-    [playerId, votes]
-  );
-
-  const votedCount = useMemo(() => {
-    const eligibleSet = new Set(eligibleVoterIds);
-    return votes.filter((vote) => eligibleSet.has(vote.voterId)).length;
-  }, [eligibleVoterIds, votes]);
-
-  const allVotesCompleted = eligibleVoterIds.length > 0 && votedCount >= eligibleVoterIds.length;
-
-  const voteResult = useMemo<VoteResult>(() => {
-    const tally = new Map<string, number>();
-    const eligibleSet = new Set(eligibleVoterIds);
-
-    votes.forEach((vote) => {
-      if (!eligibleSet.has(vote.voterId)) {
-        return;
-      }
-
-      const current = tally.get(vote.targetId) ?? 0;
-      tally.set(vote.targetId, current + 1);
-    });
-
-    if (tally.size === 0) {
-      return {
-        topTargetId: VOTE_SKIP_TARGET,
-        topCount: 0,
-        isTie: false,
-        isSkipTop: true,
-        shouldEliminate: false,
-      };
-    }
-
-    const sorted = Array.from(tally.entries()).sort((left, right) => right[1] - left[1]);
-    const [topTargetId, topCount] = sorted[0];
-    const secondCount = sorted[1]?.[1] ?? -1;
-    const isTie = topCount === secondCount;
-    const isSkipTop = topTargetId === VOTE_SKIP_TARGET;
-
-    return {
-      topTargetId,
-      topCount,
-      isTie,
-      isSkipTop,
-      shouldEliminate: !isTie && !isSkipTop,
-    };
-  }, [eligibleVoterIds, votes]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -431,8 +443,8 @@ export default function GamePage({ params }: GamePageProps) {
     setFinalizingVote(true);
 
     try {
-      const voteDocs = await getDocs(collection(db, "rooms", resolvedRoomId, "votes"));
-      const latestVotes = voteDocs.docs.map((item) => item.data() as Vote);
+      const latestVoteDocs = await getDocs(collection(db, "rooms", resolvedRoomId, "votes"));
+      const latestVotes = latestVoteDocs.docs.map((item) => item.data() as Vote);
       const eligibleSet = new Set(alivePlayers.map((player) => player.id));
       const tally = new Map<string, number>();
 
@@ -444,7 +456,9 @@ export default function GamePage({ params }: GamePageProps) {
         tally.set(vote.targetId, (tally.get(vote.targetId) ?? 0) + 1);
       });
 
-      let message = "집계 결과: 탈락자 없음";
+      let eliminatedPlayerId: string | null = null;
+      let eliminatedRole: Player["role"] | null = null;
+      let resultMessage = "집계 결과: 탈락자 없음";
 
       if (tally.size > 0) {
         const sorted = Array.from(tally.entries()).sort((left, right) => right[1] - left[1]);
@@ -454,19 +468,147 @@ export default function GamePage({ params }: GamePageProps) {
         const isSkipTop = topTargetId === VOTE_SKIP_TARGET;
 
         if (isTie || isSkipTop) {
-          message = "집계 결과: 동률 또는 넘어가기 최다로 탈락자 없음";
+          resultMessage = "집계 결과: 동률 또는 넘어가기 최다로 탈락자 없음";
         } else {
+          eliminatedPlayerId = topTargetId;
           const targetPlayer = players.find((player) => player.id === topTargetId);
-          message = `집계 결과: ${targetPlayer?.nickname ?? "알 수 없음"} (${topCount}표)`;
+          eliminatedRole = targetPlayer?.role ?? null;
+          resultMessage = `집계 결과: ${targetPlayer?.nickname ?? "알 수 없음"} 탈락 (${topCount}표)`;
+
+          if (targetPlayer) {
+            await updateDoc(doc(db, "rooms", resolvedRoomId, "players", targetPlayer.id), {
+              alive: false,
+            });
+          }
         }
       }
 
-      setVoteResultDialog({ open: true, message });
-      await updateDoc(doc(db, "rooms", resolvedRoomId), {
-        status: "result",
+      let mafiaAliveCount = 0;
+      let citizenAliveCount = 0;
+
+      players.forEach((player) => {
+        const alive = player.alive && player.id !== eliminatedPlayerId;
+
+        if (!alive) {
+          return;
+        }
+
+        if (player.role === "mafia") {
+          mafiaAliveCount += 1;
+        } else {
+          citizenAliveCount += 1;
+        }
       });
+
+      const roomRef = doc(db, "rooms", resolvedRoomId);
+      const updates: Record<string, unknown> = {
+        status: "result",
+        eliminatedPlayerId,
+        eliminatedRole,
+        resultMessage,
+        winner: null,
+        awaitingMafiaGuess: false,
+      };
+
+      if (eliminatedRole === "mafia") {
+        updates.awaitingMafiaGuess = true;
+        updates.resultMessage = `${resultMessage} / 마피아에게 제시어 추측 기회가 주어집니다.`;
+      } else if (mafiaAliveCount > 0 && mafiaAliveCount === citizenAliveCount) {
+        updates.status = "ended";
+        updates.winner = "mafia";
+        updates.resultMessage = "마피아와 시민 수가 1:1이 되어 마피아 승리";
+      }
+
+      await updateDoc(roomRef, updates);
+      setVoteResultDialog({ open: true, message: String(updates.resultMessage) });
     } finally {
       setFinalizingVote(false);
+    }
+  };
+
+  const handleMafiaGuessSubmit = async () => {
+    if (
+      !room ||
+      room.status !== "result" ||
+      !room.awaitingMafiaGuess ||
+      currentPlayer?.role !== "mafia" ||
+      !resolvedRoomId ||
+      submittingGuess
+    ) {
+      return;
+    }
+
+    const guess = normalizeText(mafiaGuessWord);
+
+    if (!guess) {
+      return;
+    }
+
+    setSubmittingGuess(true);
+
+    try {
+      const answer = normalizeText(`${room.prompt.action} ${room.prompt.subject}`);
+      const isCorrect = guess === answer;
+
+      await updateDoc(doc(db, "rooms", resolvedRoomId), {
+        status: "ended",
+        winner: isCorrect ? "mafia" : "citizen",
+        awaitingMafiaGuess: false,
+        resultMessage: isCorrect
+          ? `마피아가 제시어를 맞춰 역전 승리: ${room.prompt.action} ${room.prompt.subject}`
+          : `마피아 추측 실패, 시민 승리 / 정답: ${room.prompt.action} ${room.prompt.subject}`,
+      });
+    } finally {
+      setSubmittingGuess(false);
+    }
+  };
+
+  const handleContinueRound = async () => {
+    if (
+      !room ||
+      room.status !== "result" ||
+      room.winner ||
+      room.awaitingMafiaGuess ||
+      !isHost ||
+      continuingRound
+    ) {
+      return;
+    }
+
+    setContinuingRound(true);
+
+    try {
+      await clearRoomSubcollection(resolvedRoomId, "votes");
+      await clearRoomSubcollection(resolvedRoomId, "drawings");
+
+      const nextTurnPlayerId = room.turnOrder.find((turnPlayerId) => {
+        const player = players.find((item) => item.id === turnPlayerId);
+        return Boolean(player?.alive);
+      });
+
+      if (!nextTurnPlayerId) {
+        await updateDoc(doc(db, "rooms", resolvedRoomId), {
+          status: "ended",
+          winner: "citizen",
+          resultMessage: "마피아가 모두 제거되어 시민 승리",
+          awaitingMafiaGuess: false,
+        });
+        return;
+      }
+
+      const nextTurnIndex = room.turnOrder.findIndex((turnPlayerId) => turnPlayerId === nextTurnPlayerId);
+
+      await updateDoc(doc(db, "rooms", resolvedRoomId), {
+        status: "playing",
+        round: room.round + 1,
+        turnIndex: nextTurnIndex,
+        eliminatedPlayerId: null,
+        eliminatedRole: null,
+        resultMessage: "",
+        awaitingMafiaGuess: false,
+      });
+    } finally {
+      setContinuingRound(false);
     }
   };
 
@@ -503,25 +645,41 @@ export default function GamePage({ params }: GamePageProps) {
       return;
     }
 
-    const votingKey = `${room.round}-${room.status}`;
+    const voteKey = `${room.round}-${room.status}`;
 
-    if (autoFinalizedVoteKeyRef.current === votingKey) {
+    if (autoFinalizedVoteKeyRef.current === voteKey) {
       return;
     }
 
-    autoFinalizedVoteKeyRef.current = votingKey;
+    autoFinalizedVoteKeyRef.current = voteKey;
 
     void finalizeVoting().catch(() => {
       autoFinalizedVoteKeyRef.current = "";
     });
   }, [allVotesCompleted, finalizingVote, isHost, room, voteRemainingSeconds]);
 
+  const colorPalette = [
+    "#f8fafc",
+    "#ef4444",
+    "#22c55e",
+    "#3b82f6",
+    "#eab308",
+    "#ec4899",
+    "#f97316",
+    "#a855f7",
+  ];
+
+  const eliminatedPlayer = useMemo(
+    () => players.find((player) => player.id === room?.eliminatedPlayerId),
+    [players, room?.eliminatedPlayerId]
+  );
+
   return (
     <>
       <main className="min-h-screen bg-slate-950 px-6 py-10 text-slate-100">
-        <section className="mx-auto w-full max-w-5xl rounded-2xl border border-slate-700 bg-slate-900/90 p-8 shadow-2xl">
+        <section className="mx-auto w-full max-w-6xl rounded-2xl border border-slate-700 bg-slate-900/90 p-8 shadow-2xl">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-3xl font-bold tracking-wide">GAME START</h1>
+            <h1 className="text-3xl font-bold tracking-wide">DRAW MAFIA</h1>
             <span className="rounded-md border border-slate-600 px-3 py-1 text-xs text-slate-300">
               ROOM {resolvedRoomId || "-"}
             </span>
@@ -533,14 +691,14 @@ export default function GamePage({ params }: GamePageProps) {
               <p className="mt-2 text-xl font-bold text-emerald-300">
                 {currentPlayer?.role === "mafia" ? "마피아" : "시민"}
               </p>
-              <p className="mt-3 text-xs text-slate-400">다른 플레이어의 역할 정보는 노출되지 않습니다.</p>
+              <p className="mt-3 text-xs text-slate-400">내 정보만 확인 가능합니다.</p>
             </article>
 
             <article className="rounded-xl border border-slate-700 bg-slate-800/70 p-5 lg:col-span-2">
               <h2 className="text-sm font-semibold text-slate-300">내 제시어</h2>
               <p className="mt-2 text-2xl font-bold text-violet-300">{visiblePrompt || "로딩 중..."}</p>
               <p className="mt-3 text-xs text-slate-400">
-                시민은 전체 제시어를, 마피아는 행동/피사체 중 하나만 확인합니다.
+                시민은 전체, 마피아는 행동/피사체 하나만 확인합니다.
               </p>
             </article>
           </div>
@@ -555,13 +713,23 @@ export default function GamePage({ params }: GamePageProps) {
               <p className="mt-3 text-xs text-slate-400">
                 turnIndex: {room?.turnIndex ?? 0} / round: {room?.round ?? 1}
               </p>
-              <div className="mt-4 rounded-md border border-slate-700 bg-slate-900/80 p-3">
-                <p className="text-xs text-slate-400">DRAW TIMER</p>
-                <p className="mt-1 text-2xl font-bold text-amber-300">{remainingSeconds}s</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  제한 시간 {room?.drawTime ?? 0}초 종료 시 자동으로 다음 턴으로 이동합니다.
-                </p>
-              </div>
+
+              {room?.status === "playing" ? (
+                <div className="mt-4 rounded-md border border-slate-700 bg-slate-900/80 p-3">
+                  <p className="text-xs text-slate-400">DRAW TIMER</p>
+                  <p className="mt-1 text-2xl font-bold text-amber-300">{remainingSeconds}s</p>
+                </div>
+              ) : null}
+
+              {room?.status === "voting" ? (
+                <div className="mt-4 rounded-md border border-rose-800 bg-rose-950/30 p-3">
+                  <p className="text-xs text-rose-300">VOTING TIMER</p>
+                  <p className="mt-1 text-2xl font-bold text-amber-300">{voteRemainingSeconds}s</p>
+                  <p className="mt-1 text-xs text-slate-300">
+                    투표 진행: {votedCount} / {eligibleVoterIds.length}
+                  </p>
+                </div>
+              ) : null}
             </article>
 
             <article className="rounded-xl border border-slate-700 bg-slate-800/70 p-5">
@@ -598,8 +766,10 @@ export default function GamePage({ params }: GamePageProps) {
                     ? "현재 당신의 턴입니다."
                     : "다른 플레이어의 턴입니다."
                   : room?.status === "voting"
-                    ? "투표가 진행 중입니다."
-                    : "현재 상태에서는 입력할 수 없습니다."}
+                    ? "투표 진행 중"
+                    : room?.status === "result"
+                      ? "결과 처리 단계"
+                      : "게임 종료"}
               </p>
             </div>
 
@@ -682,22 +852,12 @@ export default function GamePage({ params }: GamePageProps) {
             <div className="mt-6 rounded-xl border border-rose-700 bg-rose-950/30 p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-sm font-semibold text-rose-200">VOTING PHASE</h2>
-                <div className="text-right">
-                  <p className="text-xs text-rose-300">남은 시간</p>
-                  <p className="text-2xl font-bold text-amber-300">{voteRemainingSeconds}s</p>
-                </div>
-              </div>
-
-              <div className="mt-3 rounded-md border border-rose-800 bg-slate-900/70 p-3 text-xs text-slate-300">
-                <p>
-                  투표 진행: {votedCount} / {eligibleVoterIds.length}
-                </p>
-                <p className="mt-1">
+                <p className="text-xs text-rose-200">
                   {isAlive
                     ? myVote
-                      ? "이미 투표를 완료했습니다."
-                      : "한 번만 투표할 수 있습니다."
-                    : "탈락한 플레이어는 투표할 수 없습니다."}
+                      ? "이미 투표 완료"
+                      : "1인 1표"
+                    : "탈락자는 투표 불가"}
                 </p>
               </div>
 
@@ -714,6 +874,7 @@ export default function GamePage({ params }: GamePageProps) {
                     <span className="text-xs text-rose-300">투표</span>
                   </button>
                 ))}
+
                 <button
                   type="button"
                   onClick={() => handleCastVote(VOTE_SKIP_TARGET)}
@@ -725,13 +886,76 @@ export default function GamePage({ params }: GamePageProps) {
               </div>
 
               <div className="mt-4 rounded-md border border-slate-700 bg-slate-900/70 p-3 text-xs text-slate-300">
-                <p>실시간 집계 미리보기</p>
-                <p className="mt-1">
-                  {voteResult.shouldEliminate
-                    ? `현재 최다 득표 대상: ${players.find((player) => player.id === voteResult.topTargetId)?.nickname ?? "알 수 없음"} (${voteResult.topCount}표)`
-                    : "현재 상태: 동률 또는 넘어가기 우세"}
-                </p>
+                {voteResult.shouldEliminate
+                  ? `현재 최다 득표: ${players.find((player) => player.id === voteResult.topTargetId)?.nickname ?? "알 수 없음"} (${voteResult.topCount}표)`
+                  : "현재 집계: 동률 또는 넘어가기 우세"}
               </div>
+            </div>
+          ) : null}
+
+          {room?.status === "result" ? (
+            <div className="mt-6 rounded-xl border border-cyan-700 bg-cyan-950/30 p-5">
+              <h2 className="text-sm font-semibold text-cyan-200">RESULT PHASE</h2>
+              <p className="mt-2 text-sm text-cyan-100">{room.resultMessage ?? "결과를 계산 중입니다."}</p>
+
+              {room.eliminatedPlayerId ? (
+                <p className="mt-2 text-sm text-slate-200">
+                  탈락자: {eliminatedPlayer?.nickname ?? "알 수 없음"} / 정체: {room.eliminatedRole ?? "미확인"}
+                </p>
+              ) : (
+                <p className="mt-2 text-sm text-slate-200">이번 라운드 탈락자 없음</p>
+              )}
+
+              {room.awaitingMafiaGuess ? (
+                <div className="mt-4 rounded-md border border-violet-700 bg-violet-950/30 p-4">
+                  <p className="text-sm text-violet-200">마피아 제시어 추측 기회</p>
+
+                  {currentPlayer?.role === "mafia" ? (
+                    <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                      <input
+                        type="text"
+                        value={mafiaGuessWord}
+                        onChange={(event) => setMafiaGuessWord(event.target.value)}
+                        placeholder="제시어 전체 입력"
+                        className="w-full rounded-md border border-violet-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleMafiaGuessSubmit}
+                        disabled={submittingGuess}
+                        className="rounded-md bg-violet-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:bg-slate-600"
+                      >
+                        {submittingGuess ? "확인 중..." : "추측 제출"}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-sm text-slate-300">마피아의 추측을 기다리는 중입니다.</p>
+                  )}
+                </div>
+              ) : null}
+
+              {!room.awaitingMafiaGuess && !room.winner ? (
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleContinueRound}
+                    disabled={!isHost || continuingRound}
+                    className="rounded-md bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-200"
+                  >
+                    {continuingRound ? "준비 중..." : "다음 라운드"}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {room?.status === "ended" ? (
+            <div className="mt-6 rounded-xl border border-emerald-700 bg-emerald-950/30 p-5">
+              <h2 className="text-xl font-bold text-emerald-200">GAME END</h2>
+              <p className="mt-2 text-sm text-emerald-100">
+                승리 팀: {room.winner === "mafia" ? "마피아" : "시민"}
+              </p>
+              <p className="mt-1 text-sm text-slate-200">{room.resultMessage ?? "게임 종료"}</p>
             </div>
           ) : null}
         </section>
@@ -743,6 +967,7 @@ export default function GamePage({ params }: GamePageProps) {
         description="역할과 제시어가 배정되었습니다. 내 정보만 확인하고 플레이를 시작하세요."
         onOpenChange={setStartDialogOpen}
       />
+
       <GameDialog
         open={voteResultDialog.open}
         title="투표 집계 완료"

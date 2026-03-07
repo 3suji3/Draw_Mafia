@@ -19,6 +19,11 @@ export type Room = {
   turnOrder: string[];
   prompt: RoomPrompt;
   mafiaId: string;
+  eliminatedPlayerId?: string | null;
+  eliminatedRole?: PlayerRole | null;
+  resultMessage?: string;
+  winner?: "mafia" | "citizen" | null;
+  awaitingMafiaGuess?: boolean;
 };
 
 export type Player = {
