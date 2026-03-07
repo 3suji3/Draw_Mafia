@@ -24,6 +24,7 @@ import type { CanvasTool, Stroke } from "@/types/canvas";
 import type { Player, Room } from "@/types/room";
 import { leaveRoomAndHandleHost, validateRoomState } from "@/utils/roomException";
 import { getOrCreatePlayerId } from "@/utils/player";
+import { resolveTestMode } from "@/utils/testMode";
 
 type GamePageProps = {
   params: Promise<{ roomId: string }>;
@@ -109,6 +110,7 @@ export default function GamePage({ params }: GamePageProps) {
     open: false,
     message: "",
   });
+  const [winnerDialogOpen, setWinnerDialogOpen] = useState(false);
 
   const [tool, setTool] = useState<CanvasTool>("pen");
   const [color, setColor] = useState("#f8fafc");
@@ -138,21 +140,13 @@ export default function GamePage({ params }: GamePageProps) {
   const botAutoTurnKeyRef = useRef<string>("");
   const autoContinuedRoundKeyRef = useRef<string>("");
   const previousEliminatedRef = useRef<string | null>(null);
+  const previousWinnerDialogKeyRef = useRef<string>("");
   const audioContextRef = useRef<AudioContext | null>(null);
 
-  const isTestMode = useMemo(() => {
-    if (process.env.NODE_ENV !== "development") {
-      return false;
-    }
-
-    const raw = searchParams.get("test");
-
-    if (raw === null) {
-      return true;
-    }
-
-    return raw === "true";
-  }, [searchParams]);
+  const { isTestMode, testQuerySuffix } = useMemo(
+    () => resolveTestMode(searchParams),
+    [searchParams]
+  );
 
   const pushToast = (message: string) => {
     const id = crypto.randomUUID();
@@ -928,6 +922,15 @@ export default function GamePage({ params }: GamePageProps) {
       .map((player) => player.nickname);
   }, [players, room?.winner]);
 
+  const isCurrentPlayerWinner = useMemo(() => {
+    if (!currentPlayer || !room?.winner) {
+      return false;
+    }
+
+    const winnerRole = room.winner === "mafia" ? "mafia" : "citizen";
+    return currentPlayer.role === winnerRole;
+  }, [currentPlayer, room?.winner]);
+
   const stageGuide = useMemo(
     () => [
       { key: "playing", label: "그림 그리기" },
@@ -952,13 +955,13 @@ export default function GamePage({ params }: GamePageProps) {
     }
 
     const timeoutId = window.setTimeout(() => {
-      router.push(`/room/${resolvedRoomId}`);
+      router.push(`/room/${resolvedRoomId}${testQuerySuffix}`);
     }, 3000);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [currentPlayer, resolvedRoomId, room, router]);
+  }, [currentPlayer, resolvedRoomId, room, router, testQuerySuffix]);
 
   useEffect(() => {
     if (!room) {
@@ -991,6 +994,21 @@ export default function GamePage({ params }: GamePageProps) {
 
     previousVoteCountRef.current = votedCount;
   }, [votedCount]);
+
+  useEffect(() => {
+    if (!room || room.status !== "ended" || !room.winner || !currentPlayer || !isCurrentPlayerWinner) {
+      return;
+    }
+
+    const winnerDialogKey = `${room.round}-${room.winner}-${currentPlayer.id}`;
+
+    if (previousWinnerDialogKeyRef.current === winnerDialogKey) {
+      return;
+    }
+
+    previousWinnerDialogKeyRef.current = winnerDialogKey;
+    setWinnerDialogOpen(true);
+  }, [currentPlayer, isCurrentPlayerWinner, room]);
 
   useEffect(() => {
     if (voteResultDialog.open) {
@@ -1575,6 +1593,13 @@ export default function GamePage({ params }: GamePageProps) {
         title="투표 집계 완료"
         description={voteResultDialog.message}
         onOpenChange={(open) => setVoteResultDialog((prev) => ({ ...prev, open }))}
+      />
+
+      <GameDialog
+        open={winnerDialogOpen}
+        title="🎉 승리!"
+        description={`축하합니다! ${currentPlayer?.nickname ?? "플레이어"}님이 승리 팀(${room?.winner === "mafia" ? "마피아" : "시민"})에 포함되었습니다.`}
+        onOpenChange={setWinnerDialogOpen}
       />
     </>
   );

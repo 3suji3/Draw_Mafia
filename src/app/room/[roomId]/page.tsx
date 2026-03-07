@@ -22,6 +22,7 @@ import { db } from "@/firebase/firebase";
 import type { Player, Room } from "@/types/room";
 import { leaveRoomAndHandleHost, validateRoomState } from "@/utils/roomException";
 import { getOrCreatePlayerId, getStoredNickname, getStoredRoomId } from "@/utils/player";
+import { resolveTestMode } from "@/utils/testMode";
 
 type RoomPageProps = {
   params: Promise<{ roomId: string }>;
@@ -66,6 +67,7 @@ export default function RoomPage({ params }: RoomPageProps) {
   const [startingGame, setStartingGame] = useState(false);
   const [recoveringPlayer, setRecoveringPlayer] = useState(false);
   const [leavingRoom, setLeavingRoom] = useState(false);
+  const [sharingRoomLink, setSharingRoomLink] = useState(false);
   const [networkDelayed, setNetworkDelayed] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [toasts, setToasts] = useState<Array<{ id: string; message: string }>>([]);
@@ -189,19 +191,10 @@ export default function RoomPage({ params }: RoomPageProps) {
   const playerId = useMemo(() => getOrCreatePlayerId(), []);
   const joinedRoomId = useMemo(() => getStoredRoomId(), []);
   const storedNickname = useMemo(() => getStoredNickname(), []);
-  const isTestMode = useMemo(() => {
-    if (process.env.NODE_ENV !== "development") {
-      return false;
-    }
-
-    const raw = searchParams.get("test");
-
-    if (raw === null) {
-      return true;
-    }
-
-    return raw === "true";
-  }, [searchParams]);
+  const { isTestMode, testQuerySuffix } = useMemo(
+    () => resolveTestMode(searchParams),
+    [searchParams]
+  );
 
   const currentPlayer = useMemo(
     () => players.find((player) => player.id === playerId),
@@ -248,9 +241,9 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
 
     if (room.status !== "waiting") {
-      router.push(`/game/${resolvedRoomId}`);
+      router.push(`/game/${resolvedRoomId}${testQuerySuffix}`);
     }
-  }, [resolvedRoomId, room, router]);
+  }, [resolvedRoomId, room, router, testQuerySuffix]);
 
   useEffect(() => {
     if (!isTestMode || !room || room.status !== "waiting" || !isHost || creatingBotsRef.current) {
@@ -424,7 +417,7 @@ export default function RoomPage({ params }: RoomPageProps) {
       });
 
       await batch.commit();
-      router.push(`/game/${resolvedRoomId}`);
+      router.push(`/game/${resolvedRoomId}${testQuerySuffix}`);
     } catch {
       openDialog("게임 시작 실패", "시작 처리 중 오류가 발생했습니다.");
     } finally {
@@ -452,6 +445,29 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
   };
 
+  const handleShareRoomLink = async () => {
+    if (!resolvedRoomId || sharingRoomLink || typeof window === "undefined") {
+      return;
+    }
+
+    setSharingRoomLink(true);
+
+    try {
+      const shareUrl = `${window.location.origin}/room/${resolvedRoomId}`;
+
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(shareUrl);
+        pushToast("방 링크를 복사했습니다.");
+      } else {
+        openDialog("링크 공유", `복사 지원이 없어 링크를 직접 전달해주세요.\n${shareUrl}`);
+      }
+    } catch {
+      openDialog("공유 실패", "링크 공유 중 문제가 발생했습니다. 다시 시도해주세요.");
+    } finally {
+      setSharingRoomLink(false);
+    }
+  };
+
   return (
     <>
       <main className="min-h-screen bg-dm-bg px-4 py-8 text-dm-text-primary sm:px-6 sm:py-10">
@@ -469,11 +485,24 @@ export default function RoomPage({ params }: RoomPageProps) {
               <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${connectionClassName}`}>
                 {connectionLabel}
               </span>
-              <span className="rounded-md border border-dm-accent/40 px-3 py-1 text-xs text-dm-text-secondary">
+              <span className="rounded-md border border-dm-accent/40 px-3 py-1 text-xs font-semibold text-dm-text-secondary">
                 ROOM {resolvedRoomId || "-"}
               </span>
+              <Button
+                type="button"
+                onClick={handleShareRoomLink}
+                disabled={sharingRoomLink}
+                variant="ghost"
+                className="px-3 py-1 text-xs"
+              >
+                {sharingRoomLink ? "공유 중..." : "링크 공유"}
+              </Button>
             </div>
           </div>
+
+          <p className="mt-2 text-xs text-dm-text-secondary">
+            방 코드: <span className="font-semibold text-dm-text-primary">{resolvedRoomId || "-"}</span>
+          </p>
 
           <Card className="mt-6 grid grid-cols-1 gap-3 border-dm-accent/20 bg-dm-bg/35 p-4 text-sm sm:grid-cols-3">
             <p>

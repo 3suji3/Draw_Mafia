@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
@@ -17,6 +17,7 @@ import { PLAYER_LIMITS, DRAW_TIME_OPTIONS, VOTE_TIME_SECONDS } from "@/constants
 import { db } from "@/firebase/firebase";
 import { getOrCreatePlayerId, getStoredNickname, persistPlayerContext } from "@/utils/player";
 import { generateRoomCode, normalizeRoomCode } from "@/utils/roomCode";
+import { resolveTestMode } from "@/utils/testMode";
 import type { Room, Player } from "@/types/room";
 import mafiaImage from "@/public/mafia.png";
 
@@ -41,6 +42,7 @@ export default function HomePage() {
   const [roomCodeInput, setRoomCodeInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [dialog, setDialog] = useState<DialogState>(INITIAL_DIALOG);
+  const [testQuerySuffix, setTestQuerySuffix] = useState("");
 
   useEffect(() => {
     const storedNickname = getStoredNickname();
@@ -48,6 +50,15 @@ export default function HomePage() {
     if (storedNickname) {
       setNickname(storedNickname);
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const result = resolveTestMode(new URLSearchParams(window.location.search));
+    setTestQuerySuffix(result.testQuerySuffix);
   }, []);
 
   const openDialog = (title: string, description: string) => {
@@ -137,7 +148,7 @@ export default function HomePage() {
       }
 
       persistPlayerContext(trimmedNickname, createdRoomId);
-      router.push(`/room/${createdRoomId}`);
+      router.push(`/room/${createdRoomId}${testQuerySuffix}`);
     } catch {
       openDialog("방 생성 실패", "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
     } finally {
@@ -215,7 +226,7 @@ export default function HomePage() {
       await setDoc(doc(db, "rooms", roomId, "players", playerId), joinPayload);
 
       persistPlayerContext(trimmedNickname, roomId);
-      router.push(`/room/${roomId}`);
+      router.push(`/room/${roomId}${testQuerySuffix}`);
     } catch {
       openDialog("입장 실패", "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
     } finally {
