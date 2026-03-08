@@ -66,28 +66,36 @@ joinedAt: timestamp
 
 ---
 
-# 5. drawings
+# 5. drawingsByPlayer
 
-Canvas 데이터
+턴별 플레이어 전용 캔버스 데이터
 
-drawings
-└ strokeId
+drawingsByPlayer
+└ playerId
 
 ---
 
-stroke
+playerDrawing
 {
 playerId: string
+playerName: string
 
-tool: "pen" | "eraser"
+gameSession: number
+round: number
+turnOrder: number
 
-color: string
-
-size: number
-
-points: [{x,y}]
+strokes: [
+	{
+		tool: "pen" | "eraser"
+		color: string
+		size: number
+		points: [{x,y}]
+		createdAtMs: number
+	}
+]
 
 createdAt: timestamp
+updatedAt: timestamp
 }
 
 ---
