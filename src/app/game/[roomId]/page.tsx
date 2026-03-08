@@ -1487,10 +1487,10 @@ export default function GamePage() {
 
   return (
     <>
-      <main className="h-screen overflow-hidden bg-dm-bg p-3 text-dm-text-primary sm:p-4">
-        <Card className="mx-auto flex h-full w-full max-w-[1500px] flex-col overflow-hidden p-3 sm:p-4" hover>
+      <main className="h-screen overflow-hidden bg-dm-bg p-2 text-dm-text-primary sm:p-4">
+        <Card className="mx-auto flex h-full w-full max-w-[1500px] flex-col overflow-hidden p-2 sm:p-4" hover>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">DRAW MAFIA</h1>
               {isTestMode ? (
                 <span className="rounded-full border border-dm-secondary/45 bg-dm-secondary/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-dm-secondary">
@@ -1509,7 +1509,7 @@ export default function GamePage() {
                 type="button"
                 onClick={() => setSoundEnabled((prev) => !prev)}
                 variant="ghost"
-                className="px-2 py-1 text-[10px]"
+                className="min-w-[94px] px-2 py-1 text-[10px]"
               >
                 {soundEnabled ? "SOUND ON" : "SOUND OFF"}
               </Button>
@@ -1518,7 +1518,7 @@ export default function GamePage() {
                 onClick={handleLeaveRoom}
                 disabled={leavingRoom}
                 variant="secondary"
-                className="px-2 py-1 text-[10px]"
+                className="min-w-[98px] px-2 py-1 text-[10px]"
               >
                 {leavingRoom ? "이탈 중" : "방 나가기"}
               </Button>
@@ -1581,7 +1581,7 @@ export default function GamePage() {
             </div>
           ) : null}
 
-          <div className="mt-3 grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden lg:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="mt-3 grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden xl:grid-cols-[minmax(0,1fr)_380px]">
             <Card className="flex min-h-0 flex-col border-dm-accent/20 bg-dm-bg/40 p-3" hover>
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold text-dm-text-secondary">DRAW BOARD</h2>
@@ -1646,7 +1646,7 @@ export default function GamePage() {
                           variant="ghost"
                           onClick={handlePrevGallery}
                           disabled={orderedDrawings.length <= 1}
-                          className="absolute left-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs"
+                          className="absolute left-2 top-1/2 h-9 w-9 min-w-0 -translate-y-1/2 px-0 py-0 text-xs"
                         >
                           {"<"}
                         </Button>
@@ -1655,7 +1655,7 @@ export default function GamePage() {
                           variant="ghost"
                           onClick={handleNextGallery}
                           disabled={orderedDrawings.length <= 1}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs"
+                          className="absolute right-2 top-1/2 h-9 w-9 min-w-0 -translate-y-1/2 px-0 py-0 text-xs"
                         >
                           {">"}
                         </Button>
@@ -1700,7 +1700,7 @@ export default function GamePage() {
                       type="button"
                       variant={rightPanelTab === "players" ? "secondary" : "ghost"}
                       onClick={() => setRightPanelTab("players")}
-                      className="h-7 px-2 text-[10px]"
+                      className="h-7 min-w-[74px] px-2 text-[10px]"
                     >
                       플레이어
                     </Button>
@@ -1708,7 +1708,7 @@ export default function GamePage() {
                       type="button"
                       variant={rightPanelTab === "vote" ? "secondary" : "ghost"}
                       onClick={() => setRightPanelTab("vote")}
-                      className="h-7 px-2 text-[10px]"
+                      className="h-7 min-w-[74px] px-2 text-[10px]"
                     >
                       투표
                     </Button>
@@ -1785,14 +1785,14 @@ export default function GamePage() {
                         value={mafiaGuessWord}
                         onChange={(event) => setMafiaGuessWord(event.target.value)}
                         placeholder="제시어 입력"
-                        className="w-full rounded-md border border-dm-secondary/40 bg-dm-bg px-2 py-1 text-xs text-dm-text-primary outline-none"
+                        className="dm-input h-9 px-3 py-2 text-xs"
                       />
                       <Button
                         type="button"
                         onClick={handleMafiaGuessSubmit}
                         disabled={submittingGuess}
                         variant="secondary"
-                        className="px-2 py-1 text-xs"
+                        className="min-w-[80px] px-3 py-2 text-xs"
                       >
                         제출
                       </Button>
@@ -1847,7 +1847,7 @@ export default function GamePage() {
                     tool === "pen"
                       ? "border-dm-accent bg-dm-accent/20 text-dm-text-primary"
                       : "border-dm-accent/25 bg-dm-bg text-dm-text-secondary"
-                  }`}
+                  } whitespace-nowrap`}
                 >
                   펜
                 </button>
@@ -1858,7 +1858,7 @@ export default function GamePage() {
                     tool === "eraser"
                       ? "border-dm-secondary bg-dm-secondary/20 text-dm-text-primary"
                       : "border-dm-secondary/30 bg-dm-bg text-dm-text-secondary"
-                  }`}
+                  } whitespace-nowrap`}
                 >
                   지우개
                 </button>
@@ -1900,7 +1900,7 @@ export default function GamePage() {
                   onClick={handleClearCanvas}
                   disabled={!canDrawNow || room?.status !== "playing" || clearingCanvas}
                   variant="ghost"
-                  className="px-3 py-1 text-xs"
+                  className="min-w-[98px] px-3 py-2 text-xs"
                 >
                   {clearingCanvas ? "지우는 중" : "전체 지우기"}
                 </Button>
@@ -1908,7 +1908,7 @@ export default function GamePage() {
                   type="button"
                   onClick={handleEndTurn}
                   disabled={!isMyTurn || endingTurn || room?.status !== "playing"}
-                  className="px-3 py-1 text-xs"
+                  className="min-w-[98px] px-3 py-2 text-xs"
                 >
                   {endingTurn ? "처리 중" : "턴 종료"}
                 </Button>

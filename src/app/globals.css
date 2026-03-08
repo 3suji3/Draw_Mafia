@@ -3,34 +3,42 @@
 @tailwind utilities;
 
 :root {
-  --dm-bg: 15 17 23;
-  --dm-card: 22 26 35;
-  --dm-card-border: 34 39 51;
-  --dm-primary: 91 140 255;
-  --dm-secondary: 139 124 255;
-  --dm-accent: 139 124 255;
-  --dm-text-primary: 255 255 255;
-  --dm-text-secondary: 161 167 179;
-  --dm-text-subtext: 161 167 179;
-  --dm-card-shadow: 0 12px 32px rgba(2, 6, 23, 0.32);
-  --dm-glow-primary-alpha: 0.16;
-  --dm-glow-accent-alpha: 0.14;
+  --dm-bg: 9 14 26;
+  --dm-card: 18 25 40;
+  --dm-card-muted: 23 32 52;
+  --dm-card-border: 43 57 84;
+  --dm-input-bg: 23 32 52;
+  --dm-primary: 96 165 250;
+  --dm-primary-soft: 30 64 175;
+  --dm-secondary: 167 139 250;
+  --dm-accent: 167 139 250;
+  --dm-accent-soft: 109 40 217;
+  --dm-text-primary: 241 245 249;
+  --dm-text-secondary: 148 163 184;
+  --dm-text-subtext: 148 163 184;
+  --dm-card-shadow: 0 16px 34px rgba(2, 6, 23, 0.36);
+  --dm-glow-primary-alpha: 0.12;
+  --dm-glow-accent-alpha: 0.1;
   color-scheme: dark;
 }
 
 html.light {
-  --dm-bg: 246 247 251;
+  --dm-bg: 248 250 252;
   --dm-card: 255 255 255;
-  --dm-card-border: 230 232 239;
-  --dm-primary: 59 130 246;
-  --dm-secondary: 124 108 255;
-  --dm-accent: 124 108 255;
-  --dm-text-primary: 29 31 35;
-  --dm-text-secondary: 107 114 128;
-  --dm-text-subtext: 107 114 128;
-  --dm-card-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
-  --dm-glow-primary-alpha: 0.08;
-  --dm-glow-accent-alpha: 0.06;
+  --dm-card-muted: 241 245 249;
+  --dm-card-border: 226 232 240;
+  --dm-input-bg: 241 245 249;
+  --dm-primary: 37 99 235;
+  --dm-primary-soft: 219 234 254;
+  --dm-secondary: 124 58 237;
+  --dm-accent: 124 58 237;
+  --dm-accent-soft: 237 233 254;
+  --dm-text-primary: 15 23 42;
+  --dm-text-secondary: 100 116 139;
+  --dm-text-subtext: 100 116 139;
+  --dm-card-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  --dm-glow-primary-alpha: 0.04;
+  --dm-glow-accent-alpha: 0.03;
   color-scheme: light;
 }
 
@@ -51,7 +59,7 @@ body {
 }
 
 .dm-card {
-  @apply rounded-xl border bg-dm-card p-6 transition duration-200;
+  @apply rounded-2xl border bg-dm-card p-6 transition duration-200;
   border-color: rgb(var(--dm-card-border));
   box-shadow: var(--dm-card-shadow);
 }
@@ -61,30 +69,50 @@ body {
 }
 
 .dm-btn {
-  @apply inline-flex items-center justify-center text-sm font-semibold transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60;
+  @apply inline-flex min-h-[44px] min-w-[120px] shrink-0 items-center justify-center whitespace-nowrap rounded-xl border px-5 py-3 text-sm font-semibold leading-none transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60;
 }
 
 .dm-btn-primary {
-  @apply dm-btn rounded-xl px-6 py-4 bg-gradient-to-r from-dm-primary to-dm-accent text-dm-text-primary hover:brightness-110;
+  @apply dm-btn border-transparent text-white;
+  background-color: rgb(var(--dm-primary));
+}
+
+.dm-btn-primary:hover {
+  background-color: rgb(var(--dm-primary) / 0.9);
 }
 
 .dm-btn-secondary {
-  @apply dm-btn rounded-xl px-6 py-4 text-dm-accent border;
-  border-color: rgb(var(--dm-accent) / 0.4);
-  background-color: rgb(var(--dm-accent) / 0.14);
+  @apply dm-btn border text-dm-primary;
+  border-color: rgb(var(--dm-primary) / 0.3);
+  background-color: rgb(var(--dm-primary-soft));
 }
 
 .dm-btn-secondary:hover {
-  background-color: rgb(var(--dm-accent) / 0.22);
+  background-color: rgb(var(--dm-primary) / 0.15);
 }
 
 .dm-btn-ghost {
-  @apply dm-btn rounded-xl px-6 py-4 border bg-dm-card text-dm-text-primary;
+  @apply dm-btn border bg-dm-card text-dm-text-primary;
   border-color: rgb(var(--dm-card-border));
 }
 
 .dm-btn-ghost:hover {
   background-color: rgb(var(--dm-primary) / 0.08);
+}
+
+.dm-input {
+  @apply w-full rounded-xl border px-4 py-3 text-sm text-dm-text-primary outline-none transition;
+  border-color: rgb(var(--dm-card-border));
+  background-color: rgb(var(--dm-input-bg));
+}
+
+.dm-input::placeholder {
+  color: rgb(var(--dm-text-secondary) / 0.88);
+}
+
+.dm-input:focus {
+  border-color: rgb(var(--dm-primary) / 0.48);
+  box-shadow: 0 0 0 3px rgb(var(--dm-primary) / 0.16);
 }
 
 .dm-dialog-overlay[data-state="open"] {

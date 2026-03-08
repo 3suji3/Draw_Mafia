@@ -269,8 +269,8 @@ export default function HomePage() {
           <div className="absolute bottom-10 left-1/3 h-60 w-60 rounded-full bg-dm-accent/20 blur-3xl" />
         </div>
 
-        <Card className="relative mx-auto w-full max-w-5xl space-y-6 p-5 sm:p-8" hover>
-          <Card className="border-dm-accent/25 bg-dm-bg/45 p-3 sm:p-4">
+        <Card className="relative mx-auto w-full max-w-[560px] space-y-4 p-4 sm:p-6" hover>
+          <Card className="border-dm-border/80 bg-dm-muted p-3 sm:p-4">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="overflow-hidden rounded-lg border border-dm-accent/35">
@@ -288,14 +288,14 @@ export default function HomePage() {
                   <p className="text-sm font-semibold text-dm-text-primary">DRAW MAFIA Command Center</p>
                 </div>
               </div>
-              <span className="rounded-full border border-dm-accent/40 bg-dm-accent/10 px-3 py-1 text-[11px] font-semibold text-dm-accent animate-pulse">
+              <span className="rounded-full border border-dm-primary/30 bg-dm-primary/10 px-3 py-1 text-[11px] font-semibold text-dm-primary animate-pulse">
                 ONLINE
               </span>
             </div>
           </Card>
 
-          <Card className="border-dm-primary/20 bg-dm-bg/40 p-5 sm:p-7" hover>
-            <div className="mx-auto max-w-3xl text-center">
+          <Card className="border-dm-border/80 bg-dm-card p-5 sm:p-6" hover>
+            <div className="mx-auto text-center">
               <div className="flex items-center justify-center gap-2">
                 <span className="rounded-full border border-dm-secondary/45 bg-dm-secondary/10 px-2 py-0.5 text-xs text-dm-secondary">
                   MAIN SCREEN
@@ -304,9 +304,9 @@ export default function HomePage() {
                   READY TO PLAY
                 </span>
               </div>
-              <h1 className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl">
+              <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
                 DRAW MAFIA
-                <span className="block bg-gradient-to-r from-dm-primary via-dm-secondary to-dm-accent bg-clip-text text-transparent">
+                <span className="block bg-gradient-to-r from-dm-primary to-dm-accent bg-clip-text text-transparent">
                   MAIN LOBBY
                 </span>
               </h1>
@@ -316,7 +316,7 @@ export default function HomePage() {
             </div>
           </Card>
 
-          <Card className="mx-auto w-full max-w-3xl space-y-5 border-dm-primary/15 bg-dm-bg/35 p-4 sm:p-5" hover>
+          <Card className="mx-auto w-full space-y-5 border-dm-border/80 bg-dm-card p-4 sm:p-5" hover>
             <label className="block">
               <span className="mb-2 block text-sm font-medium text-dm-text-secondary">닉네임</span>
               <input
@@ -324,7 +324,7 @@ export default function HomePage() {
                 value={nickname}
                 onChange={(event) => setNickname(event.target.value)}
                 placeholder="닉네임 입력"
-                className="w-full rounded-md border border-dm-border bg-dm-bg px-3 py-2 text-sm text-dm-text-primary outline-none ring-dm-primary/30 transition focus:ring"
+                className="dm-input"
                 maxLength={20}
               />
             </label>
@@ -336,18 +336,18 @@ export default function HomePage() {
                 value={roomCodeInput}
                 onChange={(event) => setRoomCodeInput(normalizeRoomCode(event.target.value))}
                 placeholder="예: AB12CD"
-                className="w-full rounded-md border border-dm-border bg-dm-bg px-3 py-2 text-sm uppercase text-dm-text-primary outline-none ring-dm-primary/30 transition focus:ring"
+                className="dm-input uppercase"
                 maxLength={8}
               />
             </label>
 
             {isLoading ? <LoadingSpinner label="매치메이킹 연결 중..." /> : null}
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Button type="button" onClick={createRoom} disabled={isLoading} variant="primary">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button type="button" onClick={createRoom} disabled={isLoading} variant="primary" className="w-full sm:flex-1">
                 {isLoading ? "처리 중..." : "방 생성"}
               </Button>
-              <Button type="button" onClick={joinRoom} disabled={isLoading} variant="ghost">
+              <Button type="button" onClick={joinRoom} disabled={isLoading} variant="ghost" className="w-full sm:flex-1">
                 {isLoading ? "처리 중..." : "방 입장"}
               </Button>
             </div>

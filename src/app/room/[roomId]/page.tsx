@@ -466,7 +466,7 @@ export default function RoomPage() {
   return (
     <>
       <main className="min-h-screen bg-dm-bg px-4 py-8 text-dm-text-primary sm:px-6 sm:py-10">
-        <Card className="mx-auto w-full max-w-4xl p-5 sm:p-8" hover>
+        <Card className="mx-auto w-full max-w-4xl p-4 sm:p-6" hover>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <h1 className="text-3xl font-semibold tracking-tight">LOBBY</h1>
@@ -476,7 +476,7 @@ export default function RoomPage() {
                 </span>
               ) : null}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${connectionClassName}`}>
                 {connectionLabel}
               </span>
@@ -488,7 +488,7 @@ export default function RoomPage() {
                 onClick={handleCopyRoomCode}
                 disabled={copyingRoomCode}
                 variant="ghost"
-                className="px-3 py-1 text-xs"
+                className="min-w-[112px] px-3 py-2 text-xs"
               >
                 {copyingRoomCode ? "복사 중..." : "방코드 복사"}
               </Button>
@@ -499,7 +499,7 @@ export default function RoomPage() {
             방 코드: <span className="font-semibold text-dm-text-primary">{resolvedRoomId || "-"}</span>
           </p>
 
-          <Card className="mt-6 grid grid-cols-1 gap-3 border-dm-accent/20 bg-dm-bg/35 p-4 text-sm sm:grid-cols-3">
+          <Card className="mt-6 grid grid-cols-1 gap-3 border-dm-accent/20 bg-dm-muted/70 p-4 text-sm sm:grid-cols-3">
             <p>
               상태: <span className="font-semibold text-dm-accent">{room?.status ?? "loading"}</span>
             </p>
@@ -563,11 +563,11 @@ export default function RoomPage() {
             ) : null}
           </div>
 
-          <Card className="mt-8 border-dm-accent/20 bg-dm-bg/35 p-4">
+          <Card className="mt-8 border-dm-accent/20 bg-dm-muted/70 p-4">
             <h2 className="text-base font-semibold text-dm-text-primary">라운드 설정</h2>
             <p className="mt-1 text-sm text-dm-text-secondary">방장만 drawTime을 변경할 수 있습니다.</p>
 
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               {DRAW_TIME_OPTIONS.map((seconds) => {
                 const active = room?.drawTime === seconds;
 
@@ -578,7 +578,7 @@ export default function RoomPage() {
                     onClick={() => handleDrawTimeChange(seconds)}
                     disabled={!isHost || updatingDrawTime}
                     variant={active ? "secondary" : "ghost"}
-                    className="rounded-xl px-3 py-2 text-sm"
+                    className="min-w-[96px] rounded-xl px-3 py-2 text-sm"
                   >
                     {seconds}초
                   </Button>
@@ -596,7 +596,7 @@ export default function RoomPage() {
               onClick={handleStartClick}
               disabled={!isHost || !canStartCount || startingGame}
               variant="primary"
-              className="px-5 py-2.5"
+              className="w-full px-5 py-3 sm:w-auto"
             >
               {startingGame ? "시작 중..." : "게임 시작"}
             </Button>
@@ -609,12 +609,12 @@ export default function RoomPage() {
           ) : null}
 
           <div className="mt-6">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
               <Button
                 type="button"
                 onClick={() => router.push("/")}
                 variant="ghost"
-                className="px-3 py-1 text-sm"
+                className="w-full px-4 py-3 text-sm sm:w-auto"
               >
                 홈으로 돌아가기
               </Button>
@@ -623,7 +623,7 @@ export default function RoomPage() {
                 onClick={handleLeaveRoom}
                 disabled={leavingRoom}
                 variant="secondary"
-                className="px-3 py-1 text-sm"
+                className="w-full px-4 py-3 text-sm sm:w-auto"
               >
                 {leavingRoom ? "이탈 처리 중..." : "방 나가기"}
               </Button>

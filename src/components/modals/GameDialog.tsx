@@ -19,7 +19,7 @@ export function GameDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="dm-dialog-overlay fixed inset-0 bg-black/60 backdrop-blur-sm" />
+        <Dialog.Overlay className="dm-dialog-overlay fixed inset-0 bg-dm-bg/70 backdrop-blur-sm" />
         <Dialog.Content className="dm-dialog-content fixed left-1/2 top-1/2 w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-dm-primary/20 bg-dm-card/95 p-6 shadow-dm-soft outline-none">
           <Dialog.Title className="text-lg font-semibold text-dm-text-primary">
             {title}
