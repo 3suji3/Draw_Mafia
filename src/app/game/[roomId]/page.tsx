@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
-  addDoc,
+  arrayUnion,
   collection,
+  deleteDoc,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   orderBy,
@@ -20,7 +22,7 @@ import { GameDialog } from "@/components/modals/GameDialog";
 import { Button, Card, LoadingSpinner, ToastStack } from "@/components/ui";
 import { PROMPT_POOL } from "@/constants/prompts";
 import { db } from "@/firebase/firebase";
-import type { CanvasTool, Stroke } from "@/types/canvas";
+import type { CanvasTool, DrawingStroke, PlayerDrawing } from "@/types/canvas";
 import type { Player, Room } from "@/types/room";
 import { leaveRoomAndHandleHost, validateRoomState } from "@/utils/roomException";
 import { getOrCreatePlayerId } from "@/utils/player";
@@ -41,9 +43,11 @@ type VoteResult = {
 
 const TIMER_STORAGE_PREFIX = "draw_mafia_turn_started";
 const VOTE_TIMER_STORAGE_PREFIX = "draw_mafia_vote_started";
+const MAFIA_GUESS_TIMER_STORAGE_PREFIX = "draw_mafia_mafia_guess_started";
 const VOTE_SKIP_TARGET = "skip";
 const SOUND_STORAGE_KEY = "draw_mafia_sound_enabled";
 const TEST_BOT_PREFIX = "bot";
+const MAFIA_GUESS_LIMIT_SECONDS = 30;
 
 function getTurnTimerKey(roomId: string, gameSession: number, round: number, turnIndex: number): string {
   return `${TIMER_STORAGE_PREFIX}_${roomId}_${gameSession}_${round}_${turnIndex}`;
@@ -51,6 +55,10 @@ function getTurnTimerKey(roomId: string, gameSession: number, round: number, tur
 
 function getVoteTimerKey(roomId: string, gameSession: number, round: number): string {
   return `${VOTE_TIMER_STORAGE_PREFIX}_${roomId}_${gameSession}_${round}`;
+}
+
+function getMafiaGuessTimerKey(roomId: string, gameSession: number, round: number): string {
+  return `${MAFIA_GUESS_TIMER_STORAGE_PREFIX}_${roomId}_${gameSession}_${round}`;
 }
 
 function isMafiaHintAction(roomId: string, mafiaId: string, round: number): boolean {
@@ -76,7 +84,7 @@ function shuffle<T>(items: T[]): T[] {
   return next;
 }
 
-async function clearRoomSubcollection(roomId: string, subcollection: "drawings" | "votes") {
+async function clearRoomSubcollection(roomId: string, subcollection: "drawingsByPlayer" | "votes") {
   const snapshot = await getDocs(collection(db, "rooms", roomId, subcollection));
 
   if (snapshot.empty) {
@@ -102,7 +110,7 @@ export default function GamePage() {
   );
   const [room, setRoom] = useState<Room | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
-  const [strokes, setStrokes] = useState<Stroke[]>([]);
+  const [drawingsByPlayer, setDrawingsByPlayer] = useState<PlayerDrawing[]>([]);
   const [votes, setVotes] = useState<Vote[]>([]);
 
   const [startDialogOpen, setStartDialogOpen] = useState(true);
@@ -111,6 +119,9 @@ export default function GamePage() {
     message: "",
   });
   const [winnerDialogOpen, setWinnerDialogOpen] = useState(false);
+  const [galleryIndex, setGalleryIndex] = useState(0);
+  const [rightPanelTab, setRightPanelTab] = useState<"players" | "vote">("players");
+  const [pendingMyStrokes, setPendingMyStrokes] = useState<DrawingStroke[]>([]);
 
   const [tool, setTool] = useState<CanvasTool>("pen");
   const [color, setColor] = useState("#f8fafc");
@@ -133,6 +144,7 @@ export default function GamePage() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [turnStartedAtMs, setTurnStartedAtMs] = useState<number | null>(null);
   const [voteStartedAtMs, setVoteStartedAtMs] = useState<number | null>(null);
+  const [mafiaGuessStartedAtMs, setMafiaGuessStartedAtMs] = useState<number | null>(null);
 
   const autoAdvancedTurnKeyRef = useRef<string>("");
   const autoFinalizedVoteKeyRef = useRef<string>("");
@@ -140,6 +152,7 @@ export default function GamePage() {
   const previousVoteCountRef = useRef(0);
   const botAutoTurnKeyRef = useRef<string>("");
   const autoContinuedRoundKeyRef = useRef<string>("");
+  const autoFinalizedMafiaGuessTimeoutKeyRef = useRef<string>("");
   const previousEliminatedRef = useRef<string | null>(null);
   const previousWinnerDialogKeyRef = useRef<string>("");
   const hostLeaveHandledRef = useRef(false);
@@ -238,10 +251,7 @@ export default function GamePage() {
       collection(db, "rooms", resolvedRoomId, "players"),
       orderBy("joinedAt", "asc")
     );
-    const drawingsRef = query(
-      collection(db, "rooms", resolvedRoomId, "drawings"),
-      orderBy("createdAt", "asc")
-    );
+    const drawingsRef = collection(db, "rooms", resolvedRoomId, "drawingsByPlayer");
     const votesRef = collection(db, "rooms", resolvedRoomId, "votes");
 
     const unsubscribeRoom = onSnapshot(roomRef, (snapshot) => {
@@ -277,15 +287,16 @@ export default function GamePage() {
     });
 
     const unsubscribeDrawings = onSnapshot(drawingsRef, (snapshot) => {
-      const nextStrokes = snapshot.docs.map((item) => {
-        const data = item.data() as Omit<Stroke, "id">;
+      const nextDrawings = snapshot.docs.map((item) => {
+        const data = item.data() as Omit<PlayerDrawing, "id">;
         return {
           id: item.id,
           ...data,
-        } as Stroke;
+          strokes: Array.isArray(data.strokes) ? data.strokes : [],
+        } as PlayerDrawing;
       });
 
-      setStrokes(nextStrokes);
+      setDrawingsByPlayer(nextDrawings);
       setNetworkDelayed(false);
     }, () => {
       setNetworkDelayed(true);
@@ -336,14 +347,175 @@ export default function GamePage() {
     return players.find((player) => player.id === currentTurnId) ?? null;
   }, [players, room]);
 
-  const isMyTurn = Boolean(
-    room && room.status === "playing" && room.turnOrder[room.turnIndex] === playerId
-  );
-  const isHost = Boolean(currentPlayer?.isHost && room?.hostId === currentPlayer?.id);
-  const isAlive = Boolean(currentPlayer?.alive);
   const currentGameSession = Number(
     (room as (Room & { gameSession?: number }) | null)?.gameSession ?? 0
   );
+
+  const currentTurnDrawing = useMemo(() => {
+    if (!currentTurnPlayer || !room) {
+      return null;
+    }
+
+    return (
+      drawingsByPlayer.find(
+        (drawing) =>
+          drawing.playerId === currentTurnPlayer.id &&
+          drawing.gameSession === currentGameSession &&
+          drawing.round === room.round
+      ) ?? null
+    );
+  }, [currentGameSession, currentTurnPlayer, drawingsByPlayer, room]);
+
+  const myRoundDrawing = useMemo(() => {
+    if (!room) {
+      return null;
+    }
+
+    return (
+      drawingsByPlayer.find(
+        (drawing) =>
+          drawing.playerId === playerId &&
+          drawing.gameSession === currentGameSession &&
+          drawing.round === room.round
+      ) ?? null
+    );
+  }, [currentGameSession, drawingsByPlayer, playerId, room]);
+
+  const currentCanvasStrokes = useMemo(() => myRoundDrawing?.strokes ?? [], [myRoundDrawing]);
+
+  const isMyTurn = Boolean(
+    room && room.status === "playing" && room.turnOrder[room.turnIndex] === playerId
+  );
+  const isAlive = Boolean(currentPlayer?.alive);
+  const canDrawNow = Boolean(room?.status === "playing" && isAlive);
+
+  const renderCanvasStrokes = useMemo(() => {
+    if (!canDrawNow) {
+      return currentCanvasStrokes;
+    }
+
+    return [...currentCanvasStrokes, ...pendingMyStrokes];
+  }, [canDrawNow, currentCanvasStrokes, pendingMyStrokes]);
+
+  const orderedDrawings = useMemo(() => {
+    if (!room || room.turnOrder.length === 0) {
+      return [] as PlayerDrawing[];
+    }
+
+    const turnOrderMap = new Map<string, number>();
+    room.turnOrder.forEach((turnPlayerId, index) => {
+      turnOrderMap.set(turnPlayerId, index);
+    });
+
+    return [...drawingsByPlayer]
+      .filter((drawing) => drawing.gameSession === currentGameSession && drawing.round === room.round)
+      .sort((left, right) => {
+        const leftOrder = turnOrderMap.get(left.playerId) ?? left.turnOrder ?? Number.MAX_SAFE_INTEGER;
+        const rightOrder = turnOrderMap.get(right.playerId) ?? right.turnOrder ?? Number.MAX_SAFE_INTEGER;
+        return leftOrder - rightOrder;
+      });
+  }, [currentGameSession, drawingsByPlayer, room]);
+
+  const activeGalleryDrawing = useMemo(() => {
+    if (orderedDrawings.length === 0) {
+      return null;
+    }
+
+    const safeIndex = Math.max(0, Math.min(galleryIndex, orderedDrawings.length - 1));
+    return orderedDrawings[safeIndex] ?? null;
+  }, [galleryIndex, orderedDrawings]);
+
+  const prevGalleryDrawing = useMemo(() => {
+    if (orderedDrawings.length <= 1) {
+      return null;
+    }
+
+    const prevIndex = (galleryIndex - 1 + orderedDrawings.length) % orderedDrawings.length;
+    return orderedDrawings[prevIndex] ?? null;
+  }, [galleryIndex, orderedDrawings]);
+
+  const nextGalleryDrawing = useMemo(() => {
+    if (orderedDrawings.length <= 1) {
+      return null;
+    }
+
+    const nextIndex = (galleryIndex + 1) % orderedDrawings.length;
+    return orderedDrawings[nextIndex] ?? null;
+  }, [galleryIndex, orderedDrawings]);
+
+  const handlePrevGallery = () => {
+    if (orderedDrawings.length === 0) {
+      return;
+    }
+
+    setGalleryIndex((prev) => (prev - 1 + orderedDrawings.length) % orderedDrawings.length);
+  };
+
+  const handleNextGallery = () => {
+    if (orderedDrawings.length === 0) {
+      return;
+    }
+
+    setGalleryIndex((prev) => (prev + 1) % orderedDrawings.length);
+  };
+
+  useEffect(() => {
+    if (orderedDrawings.length === 0) {
+      if (galleryIndex !== 0) {
+        setGalleryIndex(0);
+      }
+      return;
+    }
+
+    if (galleryIndex >= orderedDrawings.length) {
+      setGalleryIndex(orderedDrawings.length - 1);
+    }
+  }, [galleryIndex, orderedDrawings.length]);
+
+  useEffect(() => {
+    setGalleryIndex(0);
+  }, [currentGameSession, room?.round, room?.status]);
+
+  useEffect(() => {
+    if (!room) {
+      setRightPanelTab("players");
+      return;
+    }
+
+    if (room.status === "voting") {
+      setRightPanelTab("vote");
+      return;
+    }
+
+    setRightPanelTab("players");
+  }, [room]);
+
+  useEffect(() => {
+    if (!canDrawNow) {
+      setPendingMyStrokes([]);
+      return;
+    }
+
+    setPendingMyStrokes((prev) =>
+      prev.filter((pendingStroke) => {
+        if (!pendingStroke.createdAtMs) {
+          return false;
+        }
+
+        return !currentCanvasStrokes.some(
+          (savedStroke) =>
+            savedStroke.createdAtMs === pendingStroke.createdAtMs &&
+            savedStroke.points.length === pendingStroke.points.length
+        );
+      })
+    );
+  }, [canDrawNow, currentCanvasStrokes]);
+
+  useEffect(() => {
+    setPendingMyStrokes([]);
+  }, [currentGameSession, room?.round, room?.status, room?.turnIndex]);
+
+  const isHost = Boolean(currentPlayer?.isHost && room?.hostId === currentPlayer?.id);
 
   const connectionLabel = !isOnline
     ? "오프라인"
@@ -428,7 +600,7 @@ export default function GamePage() {
       return room?.drawTime ?? 0;
     }
 
-    const elapsed = Math.floor((nowMs - turnStartedAtMs) / 1000);
+    const elapsed = Math.max(0, Math.floor((nowMs - turnStartedAtMs) / 1000));
     return Math.max(0, room.drawTime - elapsed);
   }, [nowMs, room, turnStartedAtMs]);
 
@@ -437,7 +609,7 @@ export default function GamePage() {
       return room?.voteTime ?? 60;
     }
 
-    const elapsed = Math.floor((nowMs - voteStartedAtMs) / 1000);
+    const elapsed = Math.max(0, Math.floor((nowMs - voteStartedAtMs) / 1000));
     return Math.max(0, (room.voteTime ?? 60) - elapsed);
   }, [nowMs, room, voteStartedAtMs]);
 
@@ -456,6 +628,47 @@ export default function GamePage() {
 
     return Math.max(0, Math.min(100, (voteRemainingSeconds / (room.voteTime ?? 60)) * 100));
   }, [room, voteRemainingSeconds]);
+
+  const mafiaGuessRemainingSeconds = useMemo(() => {
+    if (!room || room.status !== "result" || !room.awaitingMafiaGuess || !mafiaGuessStartedAtMs) {
+      return MAFIA_GUESS_LIMIT_SECONDS;
+    }
+
+    const elapsed = Math.max(0, Math.floor((nowMs - mafiaGuessStartedAtMs) / 1000));
+    return Math.max(0, MAFIA_GUESS_LIMIT_SECONDS - elapsed);
+  }, [mafiaGuessStartedAtMs, nowMs, room]);
+
+  const mafiaGuessTimerPercent = useMemo(() => {
+    return Math.max(0, Math.min(100, (mafiaGuessRemainingSeconds / MAFIA_GUESS_LIMIT_SECONDS) * 100));
+  }, [mafiaGuessRemainingSeconds]);
+
+  const timerDisplay = useMemo(() => {
+    if (!room) {
+      return { seconds: 0, percent: 0 };
+    }
+
+    if (room.status === "voting") {
+      return { seconds: voteRemainingSeconds, percent: voteTimerPercent };
+    }
+
+    if (room.status === "result" && room.awaitingMafiaGuess) {
+      return { seconds: mafiaGuessRemainingSeconds, percent: mafiaGuessTimerPercent };
+    }
+
+    if (room.status === "playing") {
+      return { seconds: remainingSeconds, percent: drawTimerPercent };
+    }
+
+    return { seconds: 0, percent: 0 };
+  }, [
+    drawTimerPercent,
+    mafiaGuessRemainingSeconds,
+    mafiaGuessTimerPercent,
+    remainingSeconds,
+    room,
+    voteRemainingSeconds,
+    voteTimerPercent,
+  ]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -513,6 +726,29 @@ export default function GamePage() {
     setVoteStartedAtMs(now);
   }, [currentGameSession, resolvedRoomId, room?.round, room?.status]);
 
+  useEffect(() => {
+    if (!room || !resolvedRoomId || room.status !== "result" || !room.awaitingMafiaGuess) {
+      setMafiaGuessStartedAtMs(null);
+      return;
+    }
+
+    const timerKey = getMafiaGuessTimerKey(resolvedRoomId, currentGameSession, room.round);
+    const existing = window.localStorage.getItem(timerKey);
+
+    if (existing) {
+      const parsed = Number(existing);
+
+      if (Number.isFinite(parsed) && parsed > 0) {
+        setMafiaGuessStartedAtMs(parsed);
+        return;
+      }
+    }
+
+    const now = Date.now();
+    window.localStorage.setItem(timerKey, String(now));
+    setMafiaGuessStartedAtMs(now);
+  }, [currentGameSession, resolvedRoomId, room?.awaitingMafiaGuess, room?.round, room?.status]);
+
   const advanceTurn = async () => {
     if (!room || endingTurn) {
       return;
@@ -564,21 +800,43 @@ export default function GamePage() {
     }
   };
 
-  const handleStrokeComplete = async (
-    stroke: Pick<Stroke, "tool" | "color" | "size" | "points">
-  ) => {
-    if (!resolvedRoomId || !isMyTurn || stroke.points.length < 2) {
+  const handleStrokeComplete = async (stroke: DrawingStroke) => {
+    if (!resolvedRoomId || !canDrawNow || stroke.points.length < 1) {
       return;
     }
 
-    await addDoc(collection(db, "rooms", resolvedRoomId, "drawings"), {
+    const strokeToSave: DrawingStroke = {
+      ...stroke,
+      createdAtMs: stroke.createdAtMs ?? Date.now(),
+    };
+
+    setPendingMyStrokes((prev) => [...prev, strokeToSave]);
+
+    const drawingRef = doc(db, "rooms", resolvedRoomId, "drawingsByPlayer", playerId);
+    const myTurnOrder = room?.turnOrder.findIndex((turnPlayerId) => turnPlayerId === playerId) ?? 0;
+    const playerName = currentPlayer?.nickname ?? "Unknown";
+    const drawingPayload = {
       playerId,
-      tool: stroke.tool,
-      color: stroke.color,
-      size: stroke.size,
-      points: stroke.points,
+      playerName,
+      gameSession: currentGameSession,
+      round: room?.round ?? 1,
+      turnOrder: myTurnOrder,
+      strokes: arrayUnion(strokeToSave),
       createdAt: serverTimestamp(),
-    });
+      updatedAt: serverTimestamp(),
+    };
+
+    try {
+      await setDoc(drawingRef, drawingPayload, { merge: true });
+    } catch {
+      pushToast("그림 저장이 지연됩니다. 자동으로 다시 시도합니다.");
+
+      window.setTimeout(() => {
+        void setDoc(drawingRef, drawingPayload, { merge: true }).catch(() => {
+          pushToast("그림 저장 재시도 실패: 연결 상태를 확인해 주세요.");
+        });
+      }, 450);
+    }
   };
 
   const handleEndTurn = async () => {
@@ -590,14 +848,15 @@ export default function GamePage() {
   };
 
   const handleClearCanvas = async () => {
-    if (!resolvedRoomId || room?.status !== "playing" || !isMyTurn || clearingCanvas) {
+    if (!resolvedRoomId || room?.status !== "playing" || !canDrawNow || clearingCanvas) {
       return;
     }
 
     setClearingCanvas(true);
 
     try {
-      await clearRoomSubcollection(resolvedRoomId, "drawings");
+      await deleteDoc(doc(db, "rooms", resolvedRoomId, "drawingsByPlayer", playerId));
+      setPendingMyStrokes([]);
       pushToast("캔버스를 전체 지웠습니다.");
     } catch {
       setVoteResultDialog({
@@ -704,7 +963,7 @@ export default function GamePage() {
 
       if (eliminatedRole === "mafia") {
         updates.awaitingMafiaGuess = true;
-        updates.resultMessage = `${resultMessage} / 마피아에게 제시어 추측 기회가 주어집니다.`;
+        updates.resultMessage = `${resultMessage} / 마피아에게 제시어 추측 기회가 주어집니다 (30초 제한).`;
       } else if (mafiaAliveCount > 0 && mafiaAliveCount === citizenAliveCount) {
         updates.status = "ended";
         updates.winner = "mafia";
@@ -771,7 +1030,7 @@ export default function GamePage() {
 
     try {
       await clearRoomSubcollection(resolvedRoomId, "votes");
-      await clearRoomSubcollection(resolvedRoomId, "drawings");
+      await clearRoomSubcollection(resolvedRoomId, "drawingsByPlayer");
 
       const nextTurnPlayerId = room.turnOrder.find((turnPlayerId) => {
         const player = players.find((item) => item.id === turnPlayerId);
@@ -903,6 +1162,53 @@ export default function GamePage() {
       window.clearTimeout(timeoutId);
     };
   }, [continuingRound, currentGameSession, isHost, room]);
+
+  useEffect(() => {
+    if (
+      !room ||
+      room.status !== "result" ||
+      !room.awaitingMafiaGuess ||
+      !isHost ||
+      room.winner ||
+      mafiaGuessRemainingSeconds > 0
+    ) {
+      return;
+    }
+
+    const timeoutKey = `${currentGameSession}-${room.round}-mafia-guess-timeout`;
+
+    if (autoFinalizedMafiaGuessTimeoutKeyRef.current === timeoutKey) {
+      return;
+    }
+
+    autoFinalizedMafiaGuessTimeoutKeyRef.current = timeoutKey;
+
+    void (async () => {
+      try {
+        const roomRef = doc(db, "rooms", resolvedRoomId);
+        const latestRoomSnap = await getDoc(roomRef);
+
+        if (!latestRoomSnap.exists()) {
+          return;
+        }
+
+        const latestRoom = latestRoomSnap.data() as Room;
+
+        if (latestRoom.status !== "result" || !latestRoom.awaitingMafiaGuess || latestRoom.winner) {
+          return;
+        }
+
+        await updateDoc(roomRef, {
+          status: "ended",
+          winner: "citizen",
+          awaitingMafiaGuess: false,
+          resultMessage: `마피아 추측 시간(30초) 초과, 시민 승리 / 정답: ${latestRoom.prompt.action} ${latestRoom.prompt.subject}`,
+        });
+      } catch {
+        autoFinalizedMafiaGuessTimeoutKeyRef.current = "";
+      }
+    })();
+  }, [currentGameSession, isHost, mafiaGuessRemainingSeconds, resolvedRoomId, room]);
 
   const colorPalette = [
     "#f8fafc",
@@ -1120,7 +1426,7 @@ export default function GamePage() {
 
     try {
       await clearRoomSubcollection(resolvedRoomId, "votes");
-      await clearRoomSubcollection(resolvedRoomId, "drawings");
+      await clearRoomSubcollection(resolvedRoomId, "drawingsByPlayer");
 
       const playerSnaps = await getDocs(
         query(collection(db, "rooms", resolvedRoomId, "players"), orderBy("joinedAt", "asc"))
@@ -1251,13 +1557,13 @@ export default function GamePage() {
               <div>
                 <p className="text-[10px] font-semibold text-dm-text-secondary">TIMER</p>
                 <p className="mt-1 text-lg font-bold text-dm-accent">
-                  {room?.status === "voting" ? `${voteRemainingSeconds}s` : `${remainingSeconds}s`}
+                  {`${timerDisplay.seconds}s`}
                 </p>
                 <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-dm-card">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-dm-primary to-dm-accent transition-all duration-500"
                     style={{
-                      width: `${room?.status === "voting" ? voteTimerPercent : drawTimerPercent}%`,
+                      width: `${timerDisplay.percent}%`,
                     }}
                   />
                 </div>
@@ -1275,7 +1581,7 @@ export default function GamePage() {
             </div>
           ) : null}
 
-          <div className="mt-3 grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="mt-3 grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden lg:grid-cols-[minmax(0,1fr)_380px]">
             <Card className="flex min-h-0 flex-col border-dm-accent/20 bg-dm-bg/40 p-3" hover>
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold text-dm-text-secondary">DRAW BOARD</h2>
@@ -1285,21 +1591,97 @@ export default function GamePage() {
                       ? "내 턴"
                       : "상대 턴"
                     : room?.status === "voting"
-                      ? "투표 중"
+                      ? `그림 보기: ${activeGalleryDrawing?.playerName ?? "-"}`
                       : room?.status === "result"
-                        ? "결과 처리"
+                        ? `결과 보기: ${activeGalleryDrawing?.playerName ?? "-"}`
                         : "종료"}
                 </p>
               </div>
               <div className="mt-2 min-h-0 flex-1">
-                <CanvasBoard
-                  strokes={strokes}
-                  canDraw={isMyTurn && room?.status === "playing"}
-                  tool={tool}
-                  color={color}
-                  size={size}
-                  onStrokeComplete={handleStrokeComplete}
-                />
+                {room?.status === "playing" ? (
+                  <CanvasBoard
+                    strokes={renderCanvasStrokes}
+                    canDraw={canDrawNow}
+                    tool={tool}
+                    color={color}
+                    size={size}
+                    onStrokeComplete={handleStrokeComplete}
+                  />
+                ) : (
+                  <div className="relative h-full w-full">
+                    <div className="grid h-full min-h-0 grid-cols-[1fr_2.6fr_1fr] gap-2">
+                      <div className="flex min-h-0 flex-col">
+                        <p className="truncate pb-1 text-[10px] text-dm-text-secondary text-left">
+                          {prevGalleryDrawing?.playerName ?? ""}
+                        </p>
+                        <div className="min-h-0 flex-1 opacity-35">
+                          <CanvasBoard
+                            strokes={prevGalleryDrawing?.strokes ?? []}
+                            canDraw={false}
+                            tool={tool}
+                            color={color}
+                            size={size}
+                            onStrokeComplete={handleStrokeComplete}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="relative min-h-0">
+                        <CanvasBoard
+                          strokes={activeGalleryDrawing?.strokes ?? []}
+                          canDraw={false}
+                          tool={tool}
+                          color={color}
+                          size={size}
+                          onStrokeComplete={handleStrokeComplete}
+                        />
+                        <div className="pointer-events-none absolute left-2 top-2 rounded-md bg-dm-bg/75 px-2 py-1 text-[10px] text-dm-text-primary">
+                          {prevGalleryDrawing?.playerName ?? ""}
+                        </div>
+                        <div className="pointer-events-none absolute right-2 top-2 rounded-md bg-dm-bg/75 px-2 py-1 text-[10px] text-dm-text-primary">
+                          {nextGalleryDrawing?.playerName ?? ""}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={handlePrevGallery}
+                          disabled={orderedDrawings.length <= 1}
+                          className="absolute left-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs"
+                        >
+                          {"<"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={handleNextGallery}
+                          disabled={orderedDrawings.length <= 1}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs"
+                        >
+                          {">"}
+                        </Button>
+                      </div>
+
+                      <div className="flex min-h-0 flex-col">
+                        <p className="truncate pb-1 text-[10px] text-dm-text-secondary text-right">
+                          {nextGalleryDrawing?.playerName ?? ""}
+                        </p>
+                        <div className="min-h-0 flex-1 opacity-35">
+                          <CanvasBoard
+                            strokes={nextGalleryDrawing?.strokes ?? []}
+                            canDraw={false}
+                            tool={tool}
+                            color={color}
+                            size={size}
+                            onStrokeComplete={handleStrokeComplete}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <p className="mt-1 text-center text-[10px] text-dm-text-secondary">
+                      현재 {Math.min(galleryIndex + 1, orderedDrawings.length || 1)} / {Math.max(orderedDrawings.length, 1)}
+                    </p>
+                  </div>
+                )}
               </div>
             </Card>
 
@@ -1311,61 +1693,86 @@ export default function GamePage() {
                 <p className="text-[10px] text-dm-text-secondary">투표: {votedCount} / {eligibleVoterIds.length}</p>
               </Card>
 
-              <Card className="min-h-0 flex flex-1 flex-col overflow-hidden border-dm-accent/20 bg-dm-bg/40 p-3" hover>
-                <h3 className="text-[10px] font-semibold text-dm-text-secondary">플레이어 목록</h3>
-                <ul className="mt-2 space-y-1 overflow-y-auto text-xs">
-                  {room?.turnOrder.map((turnPlayerId, index) => {
-                    const player = players.find((item) => item.id === turnPlayerId);
-                    const active = room.turnIndex === index;
-                    const eliminated = !player?.alive;
-
-                    return (
-                      <li
-                        key={turnPlayerId}
-                        className={`flex items-center justify-between rounded-md border px-2 py-1 ${
-                          active
-                            ? "border-dm-accent bg-dm-accent/18 text-dm-text-primary"
-                            : eliminated
-                              ? "border-dm-accent/10 bg-dm-bg/40 text-dm-text-secondary/50 opacity-55"
-                              : "border-dm-accent/20 bg-dm-bg text-dm-text-secondary"
-                        }`}
-                      >
-                        <span className={eliminated ? "line-through" : ""}>{player?.nickname ?? "알 수 없음"}</span>
-                        <span>{player?.alive ? "생존" : "탈락"}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </Card>
-
-              {room?.status === "voting" ? (
-                <Card className="border-dm-secondary/40 bg-dm-bg/45 p-3" hover>
-                  <h3 className="text-[10px] font-semibold text-dm-secondary">VOTING</h3>
-                  <div className="mt-2 grid grid-cols-1 gap-1">
-                    {alivePlayers.map((player) => (
-                      <Button
-                        key={player.id}
-                        type="button"
-                        variant="ghost"
-                        onClick={() => handleCastVote(player.id)}
-                        disabled={!isAlive || Boolean(myVote) || submittingVote}
-                        className="flex items-center justify-between px-2 py-1 text-xs"
-                      >
-                        <span>{player.nickname}</span>
-                        <span>투표</span>
-                      </Button>
-                    ))}
+              <Card className="min-h-[190px] flex flex-1 flex-col overflow-hidden border-dm-accent/20 bg-dm-bg/40 p-3" hover>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1 rounded-lg border border-dm-accent/20 bg-dm-bg/70 p-1">
                     <Button
                       type="button"
-                      onClick={() => handleCastVote(VOTE_SKIP_TARGET)}
-                      disabled={!isAlive || Boolean(myVote) || submittingVote}
-                      className="px-2 py-1 text-xs"
+                      variant={rightPanelTab === "players" ? "secondary" : "ghost"}
+                      onClick={() => setRightPanelTab("players")}
+                      className="h-7 px-2 text-[10px]"
                     >
-                      넘어가기
+                      플레이어
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={rightPanelTab === "vote" ? "secondary" : "ghost"}
+                      onClick={() => setRightPanelTab("vote")}
+                      className="h-7 px-2 text-[10px]"
+                    >
+                      투표
                     </Button>
                   </div>
-                </Card>
-              ) : null}
+                </div>
+
+                {rightPanelTab === "players" ? (
+                  <>
+                    <ul className="mt-2 space-y-1 overflow-y-auto text-xs">
+                      {(room?.turnOrder ?? []).map((turnPlayerId, index) => {
+                          const player = players.find((item) => item.id === turnPlayerId);
+                          const active = room?.turnIndex === index;
+                          const eliminated = !player?.alive;
+
+                          return (
+                            <li
+                              key={turnPlayerId}
+                              className={`flex items-center justify-between rounded-md border px-2 py-1 ${
+                                active
+                                  ? "border-dm-accent bg-dm-accent/18 text-dm-text-primary"
+                                  : eliminated
+                                    ? "border-dm-accent/10 bg-dm-bg/40 text-dm-text-secondary/50 opacity-55"
+                                    : "border-dm-accent/20 bg-dm-bg text-dm-text-secondary"
+                              }`}
+                            >
+                              <span className={eliminated ? "line-through" : ""}>{player?.nickname ?? "알 수 없음"}</span>
+                              <span>{player?.alive ? "생존" : "탈락"}</span>
+                            </li>
+                          );
+                        })}
+                    </ul>
+                  </>
+                ) : (
+                  <div className="mt-2 min-h-0 overflow-y-auto">
+                    {room?.status === "voting" ? (
+                      <div className="grid grid-cols-1 gap-1">
+                        {alivePlayers.map((player) => (
+                          <Button
+                            key={player.id}
+                            type="button"
+                            variant="ghost"
+                            onClick={() => handleCastVote(player.id)}
+                            disabled={!isAlive || Boolean(myVote) || submittingVote}
+                            className="flex items-center justify-between px-2 py-1 text-xs"
+                          >
+                            <span>{player.nickname}</span>
+                            <span>투표</span>
+                          </Button>
+                        ))}
+                        <Button
+                          type="button"
+                          onClick={() => handleCastVote(VOTE_SKIP_TARGET)}
+                          disabled={!isAlive || Boolean(myVote) || submittingVote}
+                          className="px-2 py-1 text-xs"
+                        >
+                          넘어가기
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-dm-text-secondary">현재는 투표 단계가 아닙니다.</p>
+                    )}
+                  </div>
+                )}
+              </Card>
 
               {room?.status === "result" ? (
                 <Card className="border-dm-accent/35 bg-dm-bg/45 p-3" hover>
@@ -1391,6 +1798,9 @@ export default function GamePage() {
                       </Button>
                     </div>
                   ) : null}
+                  {room.awaitingMafiaGuess ? (
+                    <p className="mt-2 text-[11px] text-dm-secondary">마피아 추측 남은 시간: {mafiaGuessRemainingSeconds}s</p>
+                  ) : null}
                 </Card>
               ) : null}
 
@@ -1399,12 +1809,17 @@ export default function GamePage() {
                   <h3 className="text-sm font-bold text-dm-secondary">GAME END</h3>
                   <p className="mt-1 text-xs text-dm-text-primary">승리 팀: {room.winner === "mafia" ? "마피아" : "시민"}</p>
                   <p className="text-xs text-dm-accent">승리자: {winnerNicknames.length > 0 ? winnerNicknames.join(", ") : "확인 불가"}</p>
-                  <div className="mt-2 flex flex-wrap gap-1">
+                  <p className="mt-2 text-[11px] text-dm-text-secondary">
+                    {isHost
+                      ? "다음 게임은 '같은 방 다시 시작' 버튼을 눌러 시작하세요."
+                      : "방장이 다시 시작할 때까지 대기하거나 홈으로 이동할 수 있습니다."}
+                  </p>
+                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <Button
                       type="button"
                       onClick={handleRestartGame}
                       disabled={!isHost || restartingGame}
-                      className="px-2 py-1 text-xs"
+                      className="w-full px-3 py-2 text-sm"
                     >
                       {restartingGame ? "재시작 중" : "같은 방 다시 시작"}
                     </Button>
@@ -1412,7 +1827,7 @@ export default function GamePage() {
                       type="button"
                       onClick={() => router.push("/")}
                       variant="secondary"
-                      className="px-2 py-1 text-xs"
+                      className="w-full px-3 py-2 text-sm"
                     >
                       홈
                     </Button>
@@ -1483,7 +1898,7 @@ export default function GamePage() {
                 <Button
                   type="button"
                   onClick={handleClearCanvas}
-                  disabled={!isMyTurn || room?.status !== "playing" || clearingCanvas}
+                  disabled={!canDrawNow || room?.status !== "playing" || clearingCanvas}
                   variant="ghost"
                   className="px-3 py-1 text-xs"
                 >

@@ -14,6 +14,7 @@ export type Room = {
   maxPlayers: number;
   drawTime: number;
   voteTime: number;
+  gameSession?: number;
   round: number;
   turnIndex: number;
   turnOrder: string[];

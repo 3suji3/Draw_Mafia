@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import type { CanvasTool, Stroke, StrokePoint } from "@/types/canvas";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { CanvasTool, DrawingStroke } from "@/types/canvas";
 
 type CanvasBoardProps = {
-  strokes: Stroke[];
+  strokes: DrawingStroke[];
   canDraw: boolean;
   tool: CanvasTool;
   color: string;
   size: number;
-  onStrokeComplete: (stroke: Pick<Stroke, "tool" | "color" | "size" | "points">) => Promise<void>;
+  onStrokeComplete: (stroke: DrawingStroke) => Promise<void>;
 };
 
 const CANVAS_WIDTH = 960;
@@ -32,7 +32,7 @@ function resolveCanvasBackgroundColor(): string {
 
 function drawStroke(
   context: CanvasRenderingContext2D,
-  stroke: Pick<Stroke, "tool" | "color" | "size" | "points">,
+  stroke: DrawingStroke,
   backgroundColor: string
 ) {
   if (stroke.points.length === 0) {
@@ -44,6 +44,14 @@ function drawStroke(
   context.lineWidth = stroke.size;
   context.strokeStyle = stroke.tool === "eraser" ? backgroundColor : stroke.color;
 
+  if (stroke.points.length === 1) {
+    context.beginPath();
+    context.fillStyle = context.strokeStyle;
+    context.arc(stroke.points[0].x, stroke.points[0].y, stroke.size / 2, 0, Math.PI * 2);
+    context.fill();
+    return;
+  }
+
   context.beginPath();
   context.moveTo(stroke.points[0].x, stroke.points[0].y);
 
@@ -52,6 +60,28 @@ function drawStroke(
   }
 
   context.stroke();
+}
+
+function interpolatePoints(
+  from: DrawingStroke["points"][number],
+  to: DrawingStroke["points"][number]
+): DrawingStroke["points"] {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const distance = Math.hypot(dx, dy);
+  const stepPx = 2;
+  const steps = Math.max(0, Math.floor(distance / stepPx) - 1);
+  const points: DrawingStroke["points"] = [];
+
+  for (let step = 1; step <= steps; step += 1) {
+    const ratio = step / (steps + 1);
+    points.push({
+      x: from.x + dx * ratio,
+      y: from.y + dy * ratio,
+    });
+  }
+
+  return points;
 }
 
 export function CanvasBoard({
@@ -63,15 +93,22 @@ export function CanvasBoard({
   onStrokeComplete,
 }: CanvasBoardProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const drawingRef = useRef(false);
-  const [activePoints, setActivePoints] = useState<StrokePoint[]>([]);
+  const drawingRef = useRef<boolean>(false);
+  const [activePoints, setActivePoints] = useState<DrawingStroke["points"]>([]);
+  const activePointsRef = useRef<DrawingStroke["points"]>([]);
 
-  const activeStroke = useMemo(
-    () => ({ tool, color, size, points: activePoints }),
-    [activePoints, color, size, tool]
-  );
+  const canvasBackgroundColor = useMemo(() => resolveCanvasBackgroundColor(), []);
 
-  const canvasBackgroundColor = resolveCanvasBackgroundColor();
+  const activeStroke = useMemo<DrawingStroke>(() => ({
+    tool,
+    color,
+    size,
+    points: activePoints,
+  }), [activePoints, color, size, tool]);
+
+  useEffect(() => {
+    activePointsRef.current = activePoints;
+  }, [activePoints]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -98,7 +135,7 @@ export function CanvasBoard({
     }
   }, [activeStroke, canvasBackgroundColor, strokes]);
 
-  const getPointFromEvent = (event: ReactPointerEvent<HTMLCanvasElement>): StrokePoint => {
+  const getPointFromEvent = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
 
     if (!canvas) {
@@ -106,8 +143,10 @@ export function CanvasBoard({
     }
 
     const rect = canvas.getBoundingClientRect();
-    const ratioX = CANVAS_WIDTH / rect.width;
-    const ratioY = CANVAS_HEIGHT / rect.height;
+    const width = rect.width || canvas.clientWidth || 1;
+    const height = rect.height || canvas.clientHeight || 1;
+    const ratioX = CANVAS_WIDTH / width;
+    const ratioY = CANVAS_HEIGHT / height;
 
     return {
       x: (event.clientX - rect.left) * ratioX,
@@ -120,6 +159,7 @@ export function CanvasBoard({
       return;
     }
 
+    event.currentTarget.setPointerCapture(event.pointerId);
     drawingRef.current = true;
     setActivePoints([getPointFromEvent(event)]);
   };
@@ -129,22 +169,38 @@ export function CanvasBoard({
       return;
     }
 
-    const point = getPointFromEvent(event);
-    setActivePoints((prev) => [...prev, point]);
+    const nextPoint = getPointFromEvent(event);
+
+    setActivePoints((prev) => {
+      const last = prev[prev.length - 1];
+
+      if (!last) {
+        return [nextPoint];
+      }
+
+      return [...prev, ...interpolatePoints(last, nextPoint), nextPoint];
+    });
   };
 
   const completeStroke = async () => {
-    if (!canDraw || activePoints.length < 2) {
+    const finalizedPoints = [...activePointsRef.current];
+
+    if (!canDraw || finalizedPoints.length < 1) {
       setActivePoints([]);
       return;
     }
 
-    await onStrokeComplete({
-      tool,
-      color,
-      size,
-      points: activePoints,
-    });
+    try {
+      await onStrokeComplete({
+        tool,
+        color,
+        size,
+        points: finalizedPoints,
+        createdAtMs: Date.now(),
+      });
+    } catch {
+      // Keep interaction stable even when remote save fails.
+    }
 
     setActivePoints([]);
   };
@@ -158,7 +214,7 @@ export function CanvasBoard({
     await completeStroke();
   };
 
-  const handlePointerLeave = async () => {
+  const handlePointerCancel = async () => {
     if (!drawingRef.current) {
       return;
     }
@@ -167,18 +223,27 @@ export function CanvasBoard({
     await completeStroke();
   };
 
+  useEffect(() => {
+    if (!canDraw && activePoints.length > 0) {
+      setActivePoints([]);
+    }
+  }, [activePoints.length, canDraw]);
+
   return (
-    <div className="w-full overflow-hidden rounded-xl border border-dm-accent/20 bg-dm-card">
-      <canvas
-        ref={canvasRef}
-        width={CANVAS_WIDTH}
-        height={CANVAS_HEIGHT}
-        className={`h-auto w-full touch-none ${canDraw ? "cursor-crosshair" : "cursor-not-allowed opacity-80"}`}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerLeave}
-      />
+    <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-xl border border-dm-accent/20 bg-dm-card">
+      <div className="aspect-video h-full w-full max-h-full max-w-full">
+        <canvas
+          ref={canvasRef}
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+          className={`h-full w-full touch-none ${canDraw ? "cursor-crosshair" : "cursor-not-allowed opacity-80"}`}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          onPointerLeave={handlePointerCancel}
+        />
+      </div>
     </div>
   );
 }
