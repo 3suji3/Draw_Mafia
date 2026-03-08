@@ -5,6 +5,7 @@
     "clean:next": "node -e \"require('node:fs').rmSync('.next', { recursive: true, force: true })\"",
     "dev": "next dev --webpack",
     "dev:clean": "npm run clean:next && next dev --webpack",
+    "dev:reset": "node scripts/dev-reset.js",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
