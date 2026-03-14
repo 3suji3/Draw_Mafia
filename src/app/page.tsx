@@ -12,6 +12,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { GameDialog } from "@/components/modals/GameDialog";
+import { RuleGuideModal } from "@/components/modals/RuleGuideModal";
 import { Button, Card, LoadingSpinner } from "@/components/ui";
 import { PLAYER_LIMITS, DRAW_TIME_OPTIONS, VOTE_TIME_SECONDS } from "@/constants/game";
 import { db } from "@/firebase/firebase";
@@ -64,6 +65,7 @@ export default function HomePage() {
   const [roomCodeInput, setRoomCodeInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [dialog, setDialog] = useState<DialogState>(INITIAL_DIALOG);
+  const [ruleModalOpen, setRuleModalOpen] = useState(false);
   const [testQuerySuffix, setTestQuerySuffix] = useState("");
 
   useEffect(() => {
@@ -354,6 +356,17 @@ export default function HomePage() {
                 {isLoading ? "처리 중..." : "방 입장"}
               </Button>
             </div>
+
+            <div className="flex justify-center pt-1">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setRuleModalOpen(true)}
+                className="min-w-[132px]"
+              >
+                룰 설명
+              </Button>
+            </div>
           </Card>
         </Card>
       </main>
@@ -363,6 +376,11 @@ export default function HomePage() {
         title={dialog.title}
         description={dialog.description}
         onOpenChange={closeDialog}
+      />
+
+      <RuleGuideModal
+        open={ruleModalOpen}
+        onOpenChange={setRuleModalOpen}
       />
     </>
   );
