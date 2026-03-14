@@ -20,7 +20,7 @@ import {
 import { CanvasBoard } from "@/components/canvas";
 import { GameDialog } from "@/components/modals/GameDialog";
 import { Button, Card, LoadingSpinner, ToastStack } from "@/components/ui";
-import { PROMPT_PAIRS } from "@/constants/promptPairs";
+import { getRandomPromptPair } from "@/constants/promptPairs";
 import { db } from "@/firebase/firebase";
 import type { CanvasTool, DrawingStroke, PlayerDrawing } from "@/types/canvas";
 import { toCitizenPromptText, toMafiaPromptText } from "@/types/prompt";
@@ -1450,7 +1450,7 @@ export default function GamePage() {
 
       const turnOrder = shuffle(currentPlayers.map((player) => player.id));
       const mafiaId = turnOrder[Math.floor(Math.random() * turnOrder.length)];
-      const selectedPrompt = PROMPT_PAIRS[Math.floor(Math.random() * PROMPT_PAIRS.length)];
+      const selectedPrompt = getRandomPromptPair();
 
       const roomRef = doc(db, "rooms", resolvedRoomId);
       const batch = writeBatch(db);
