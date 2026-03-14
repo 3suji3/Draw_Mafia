@@ -143,8 +143,11 @@ export default function HomePage() {
           turnIndex: 0,
           turnOrder: [],
           prompt: {
-            action: "",
-            subject: "",
+            citizenAction: "",
+            mafiaAction: "",
+            citizenSubject: "",
+            mafiaSubject: "",
+            category: "",
           },
           mafiaId: "",
           endedByHostLeave: false,

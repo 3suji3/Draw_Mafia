@@ -16,7 +16,7 @@ import {
 } from "firebase/firestore";
 import { GameDialog } from "@/components/modals/GameDialog";
 import { Button, Card, LoadingSpinner, ToastStack } from "@/components/ui";
-import { PROMPT_POOL } from "@/constants/prompts";
+import { PROMPT_PAIRS } from "@/constants/promptPairs";
 import { PLAYER_LIMITS, DRAW_TIME_OPTIONS } from "@/constants/game";
 import { db } from "@/firebase/firebase";
 import type { Player, Room } from "@/types/room";
@@ -388,7 +388,7 @@ export default function RoomPage() {
 
       const turnOrder = shuffle(currentPlayers.map((player) => player.id));
       const mafiaId = turnOrder[Math.floor(Math.random() * turnOrder.length)];
-      const selectedPrompt = PROMPT_POOL[Math.floor(Math.random() * PROMPT_POOL.length)];
+      const selectedPrompt = PROMPT_PAIRS[Math.floor(Math.random() * PROMPT_PAIRS.length)];
       const roomGameSession = Number((room as Room & { gameSession?: number }).gameSession ?? 0);
 
       const batch = writeBatch(db);

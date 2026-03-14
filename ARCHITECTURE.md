@@ -131,6 +131,21 @@ votes collection
 
 ---
 
+# 10-1. Prompt System
+
+room.prompt는 PromptPair 구조를 사용한다.
+
+- citizenAction + citizenSubject
+- mafiaAction + mafiaSubject
+- category
+
+게임 시작 시 PromptPair 1개를 선택하고,
+시민/마피아 각각에게 완성형 제시어를 지급한다.
+
+부분 힌트(행동만/피사체만) 규칙은 사용하지 않는다.
+
+---
+
 # 11. UI System
 
 알림

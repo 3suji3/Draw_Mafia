@@ -20,9 +20,10 @@ import {
 import { CanvasBoard } from "@/components/canvas";
 import { GameDialog } from "@/components/modals/GameDialog";
 import { Button, Card, LoadingSpinner, ToastStack } from "@/components/ui";
-import { PROMPT_POOL } from "@/constants/prompts";
+import { PROMPT_PAIRS } from "@/constants/promptPairs";
 import { db } from "@/firebase/firebase";
 import type { CanvasTool, DrawingStroke, PlayerDrawing } from "@/types/canvas";
+import { toCitizenPromptText, toMafiaPromptText } from "@/types/prompt";
 import type { Player, Room } from "@/types/room";
 import { leaveRoomAndHandleHost, validateRoomState } from "@/utils/roomException";
 import { getOrCreatePlayerId } from "@/utils/player";
@@ -59,12 +60,6 @@ function getVoteTimerKey(roomId: string, gameSession: number, round: number): st
 
 function getMafiaGuessTimerKey(roomId: string, gameSession: number, round: number): string {
   return `${MAFIA_GUESS_TIMER_STORAGE_PREFIX}_${roomId}_${gameSession}_${round}`;
-}
-
-function isMafiaHintAction(roomId: string, mafiaId: string, round: number): boolean {
-  const seed = `${roomId}-${mafiaId}-${round}`;
-  const total = Array.from(seed).reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  return total % 2 === 0;
 }
 
 function normalizeText(text: string): string {
@@ -583,17 +578,27 @@ export default function GamePage() {
     }
 
     if (currentPlayer.role === "citizen") {
-      return `${room.prompt.action} ${room.prompt.subject}`;
+      return toCitizenPromptText(room.prompt);
     }
 
-    if (!room.mafiaId) {
+    return toMafiaPromptText(room.prompt);
+  }, [currentPlayer, room]);
+
+  const citizenPromptText = useMemo(() => {
+    if (!room) {
       return "";
     }
 
-    return isMafiaHintAction(room.id, room.mafiaId, room.round)
-      ? room.prompt.action
-      : room.prompt.subject;
-  }, [currentPlayer, room]);
+    return toCitizenPromptText(room.prompt);
+  }, [room]);
+
+  const mafiaPromptText = useMemo(() => {
+    if (!room) {
+      return "";
+    }
+
+    return toMafiaPromptText(room.prompt);
+  }, [room]);
 
   const remainingSeconds = useMemo(() => {
     if (!room || room.status !== "playing" || !turnStartedAtMs) {
@@ -998,16 +1003,18 @@ export default function GamePage() {
     setSubmittingGuess(true);
 
     try {
-      const answer = normalizeText(`${room.prompt.action} ${room.prompt.subject}`);
+      const answer = normalizeText(toCitizenPromptText(room.prompt));
       const isCorrect = guess === answer;
+      const citizenPromptText = toCitizenPromptText(room.prompt);
+      const mafiaPromptText = toMafiaPromptText(room.prompt);
 
       await updateDoc(doc(db, "rooms", resolvedRoomId), {
         status: "ended",
         winner: isCorrect ? "mafia" : "citizen",
         awaitingMafiaGuess: false,
         resultMessage: isCorrect
-          ? `마피아가 제시어를 맞춰 역전 승리: ${room.prompt.action} ${room.prompt.subject}`
-          : `마피아 추측 실패, 시민 승리 / 정답: ${room.prompt.action} ${room.prompt.subject}`,
+          ? `마피아가 시민 제시어를 맞춰 역전 승리 / 시민: ${citizenPromptText} / 마피아: ${mafiaPromptText}`
+          : `마피아 추측 실패, 시민 승리 / 시민 정답: ${citizenPromptText} / 마피아 제시어: ${mafiaPromptText}`,
       });
     } finally {
       setSubmittingGuess(false);
@@ -1202,7 +1209,7 @@ export default function GamePage() {
           status: "ended",
           winner: "citizen",
           awaitingMafiaGuess: false,
-          resultMessage: `마피아 추측 시간(30초) 초과, 시민 승리 / 정답: ${latestRoom.prompt.action} ${latestRoom.prompt.subject}`,
+          resultMessage: `마피아 추측 시간(30초) 초과, 시민 승리 / 시민 정답: ${toCitizenPromptText(latestRoom.prompt)} / 마피아 제시어: ${toMafiaPromptText(latestRoom.prompt)}`,
         });
       } catch {
         autoFinalizedMafiaGuessTimeoutKeyRef.current = "";
@@ -1443,7 +1450,7 @@ export default function GamePage() {
 
       const turnOrder = shuffle(currentPlayers.map((player) => player.id));
       const mafiaId = turnOrder[Math.floor(Math.random() * turnOrder.length)];
-      const selectedPrompt = PROMPT_POOL[Math.floor(Math.random() * PROMPT_POOL.length)];
+      const selectedPrompt = PROMPT_PAIRS[Math.floor(Math.random() * PROMPT_PAIRS.length)];
 
       const roomRef = doc(db, "rooms", resolvedRoomId);
       const batch = writeBatch(db);
@@ -1813,6 +1820,12 @@ export default function GamePage() {
                     {isHost
                       ? "다음 게임은 '같은 방 다시 시작' 버튼을 눌러 시작하세요."
                       : "방장이 다시 시작할 때까지 대기하거나 홈으로 이동할 수 있습니다."}
+                  </p>
+                  <p className="mt-2 text-[11px] text-dm-text-secondary">
+                    시민 제시어: <span className="font-semibold text-dm-text-primary">{citizenPromptText || "-"}</span>
+                  </p>
+                  <p className="text-[11px] text-dm-text-secondary">
+                    마피아 제시어: <span className="font-semibold text-dm-text-primary">{mafiaPromptText || "-"}</span>
                   </p>
                   <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <Button

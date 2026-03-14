@@ -1,11 +1,10 @@
+import type { PromptPair } from "@/types/prompt";
+
 export type PlayerRole = "citizen" | "mafia";
 
 export type RoomStatus = "waiting" | "playing" | "voting" | "result" | "ended";
 
-export type RoomPrompt = {
-  action: string;
-  subject: string;
-};
+export type RoomPrompt = PromptPair;
 
 export type Room = {
   id: string;

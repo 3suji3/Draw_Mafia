@@ -31,8 +31,11 @@ turnOrder: string[]
 
 prompt:
 {
-action: string
-subject: string
+citizenAction: string
+mafiaAction: string
+citizenSubject: string
+mafiaSubject: string
+category: string
 }
 
 mafiaId: string
