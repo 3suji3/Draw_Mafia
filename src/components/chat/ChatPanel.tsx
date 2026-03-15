@@ -37,8 +37,6 @@ export function ChatPanel({ roomId, playerId, nickname, isEnabled, disabledReaso
   const [showNewMessageHint, setShowNewMessageHint] = useState(false);
   const [pendingNewMessageCount, setPendingNewMessageCount] = useState(0);
   const [isInputFocused, setIsInputFocused] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -142,32 +140,6 @@ export function ChatPanel({ roomId, playerId, nickname, isEnabled, disabledReaso
     });
   }, [open]);
 
-  useEffect(() => {
-    if (!open || !isTabletUp) {
-      return;
-    }
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-
-      if (!(target instanceof Node)) {
-        return;
-      }
-
-      if (panelRef.current?.contains(target) || buttonRef.current?.contains(target)) {
-        return;
-      }
-
-      setOpen(false);
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-    };
-  }, [isTabletUp, open]);
-
   const handleOpen = () => {
     setOpen(true);
     setUnreadCount(0);
@@ -219,7 +191,6 @@ export function ChatPanel({ roomId, playerId, nickname, isEnabled, disabledReaso
   return (
     <>
       <button
-        ref={buttonRef}
         type="button"
         aria-label="채팅 열기"
         onClick={open ? handleClose : handleOpen}
@@ -247,14 +218,21 @@ export function ChatPanel({ roomId, playerId, nickname, isEnabled, disabledReaso
       </button>
 
       {open ? (
-        <div
-          ref={panelRef}
-          className="fixed inset-y-0 right-0 z-50 hidden w-80 translate-x-0 flex-col border-l shadow-dm-soft md:flex"
-          style={{
-            borderColor: "rgb(var(--dm-card-border))",
-            backgroundColor: "rgb(var(--dm-card))",
-          }}
-        >
+        <>
+          <button
+            type="button"
+            aria-label="채팅 닫기 배경"
+            onClick={handleClose}
+            className="fixed inset-0 z-40 hidden cursor-default md:block"
+          />
+
+          <div
+            className="fixed inset-y-0 right-0 z-50 hidden w-80 flex-col border-l shadow-dm-soft md:flex"
+            style={{
+              borderColor: "rgb(var(--dm-card-border))",
+              backgroundColor: "rgb(var(--dm-card))",
+            }}
+          >
           <div
             className="flex shrink-0 items-center justify-between px-4 py-3"
             style={{ borderBottom: "1px solid rgb(var(--dm-card-border))" }}
@@ -404,7 +382,8 @@ export function ChatPanel({ roomId, playerId, nickname, isEnabled, disabledReaso
               </p>
             ) : null}
           </div>
-        </div>
+          </div>
+        </>
       ) : null}
     </>
   );
