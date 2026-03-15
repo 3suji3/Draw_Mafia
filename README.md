@@ -1,206 +1,148 @@
-# 🎨 그림마피아 (Draw Mafia)
+# Draw Mafia
 
-실시간 멀티플레이 그림 추리 게임
+실시간 멀티플레이 그림 추리 게임이다. 각 플레이어는 시민 또는 마피아 역할을 받고, 시민과 마피아는 서로 헷갈릴 수 있도록 유사하지만 다른 완성형 제시어를 받는다.
 
-플레이어들은 그림을 통해 서로의 정체를 추리한다.  
-시민과 마피아는 서로 유사하지만 다른 완성형 제시어를 받는다.
+이 프로젝트의 실제 게임 구조는 다음 두 가지를 동시에 만족한다.
 
-그림을 그리며 서로의 정체를 추리하고  
-투표를 통해 마피아를 찾아내는 게임이다.
+- 그림 입력은 현재 턴 플레이어만 가능하다.
+- 하지만 그 플레이어가 그리는 과정은 다른 플레이어에게도 실시간으로 공유된다.
 
----
+## 프로젝트 개요
 
-# 🕹️ 게임 규칙
+Draw Mafia는 방 생성 후 여러 명이 같은 게임 세션에 참여하고, 각자 한 번씩 그림을 그린 다음 투표로 마피아를 찾아내는 턴 기반 실시간 게임이다. 프론트엔드는 Next.js App Router, 실시간 동기화는 Firebase Firestore, 그림판은 HTML Canvas 직접 구현을 사용한다.
 
-### 플레이어 수
-- 최소 3명
-- 최대 10명
-- 테스트 모드에서는 1명 가능
+## 게임 규칙 요약
 
-### 역할
-- 시민
-- 마피아
+- 플레이어 수는 기본 3명 이상 10명 이하이며, 테스트 모드에서는 1명 시작도 허용한다.
+- 역할은 시민과 마피아로 나뉜다.
+- 그림 그리기 순서는 게임 시작 시 무작위로 정해진다.
+- 현재 턴 플레이어만 입력할 수 있다.
+- 모든 생존 플레이어가 그림을 완료하면 투표 단계로 넘어간다.
+- 동률 또는 넘어가기 최다가 아니면 최다 득표자가 탈락한다.
+- 시민이 마피아를 탈락시키면 마피아는 시민 제시어를 맞힐 마지막 기회를 가진다.
+- 투표 시간은 30초, 마피아 정답 입력 시간은 20초다.
 
-### 제시어 시스템
+## 시민/마피아 제시어 시스템 설명
 
-제시어는 다음 형태로 구성된다.
+제시어는 항상 완성형 문장 조각 두 개로 구성된다.
 
-행동 + 피사체
+- 시민: 행동 + 피사체
+- 마피아: 시민 제시어와 유사하지만 다른 행동 + 피사체
 
-예시
+예시:
 
-먹는 고양이
-자는 강아지
-뛰는 사람
+- 시민: 먹는 고양이
+- 마피아: 마시는 강아지
 
-시민은 `citizenAction + citizenSubject`를 받는다.
+현재 데이터 구조는 완성형 pair를 무한히 직접 적는 방식이 아니라 `actionPairs`와 `subjectPairs`를 분리한 뒤 카테고리 호환 규칙으로 조합을 생성하는 방식이다. 이 구조 덕분에 카테고리별 데이터만 더 넣으면 제시어 풀을 크게 늘릴 수 있다.
 
-마피아는 `mafiaAction + mafiaSubject`를 받는다.
+## 방 생성 / 방 입장 흐름
 
-예시
+1. 홈 화면에서 닉네임을 입력한다.
+2. `방 만들기`를 누르면 room document와 host player document가 Firestore에 생성된다.
+3. `방 입장`을 누르면 방 코드 유효성, 정원, 중복 닉네임, 게임 상태를 확인한 뒤 player document를 추가한다.
+4. 대기방에서는 플레이어 목록과 draw time 설정을 실시간으로 본다.
+5. 방장이 시작 버튼을 누르면 역할, 제시어, 턴 순서가 생성되고 게임 화면으로 이동한다.
 
-시민: 먹는 고양이
-마피아: 마시는 강아지
+## 게임 시작 후 상태 흐름 설명
 
-마피아에게 시민 제시어의 일부(행동만/피사체만)는 제공하지 않는다.
+상태는 아래 순서로 진행된다.
 
----
+`waiting -> playing -> voting -> result -> ended`
 
-# 🎮 게임 흐름
+- `waiting`: 플레이어 입장 대기, 방장 설정 가능
+- `playing`: 현재 턴 플레이어가 그림을 입력하고 모두가 그 과정을 실시간으로 본다
+- `voting`: 생존 플레이어가 마피아로 의심되는 대상을 투표한다
+- `result`: 탈락 결과를 공개하고, 필요하면 마피아 정답 입력을 진행한다
+- `ended`: 승리 팀과 최종 결과를 보여준다
 
-대기방
-↓
-게임 시작
-↓
-역할 배정
-↓
-그림 그리기
-↓
-투표
-↓
-결과 공개
-↓
-다음 라운드 또는 게임 종료
+## 그림판 동작 방식 설명
 
----
+그림판은 HTML Canvas 직접 구현이다. Fabric.js나 Konva를 사용하지 않는다.
 
-# 🖌️ 그림 저장/표시 방식
+- 입력 이벤트는 pointer 기반으로 처리한다.
+- stroke는 `tool`, `color`, `size`, `points[]`, `createdAtMs` 형태로 저장된다.
+- `points[]`에는 드래그 중 보간된 좌표가 들어가므로 선이 끊기지 않게 이어진다.
+- 현재 턴 플레이어만 입력 가능하다.
+- 다른 플레이어는 같은 `drawingsByPlayer` 문서를 실시간 구독해 그려지는 과정을 본다.
 
-- 각 턴은 플레이어 전용 캔버스 1장으로 저장된다.
-- 턴 종료 시 해당 플레이어의 그림이 확정되고, 다음 플레이어는 빈 캔버스에서 시작한다.
-- 저장 단위는 점(point)이 아니라 스트로크(stroke) 배열이다.
-- 캔버스 렌더링은 requestAnimationFrame 기반으로 최적화되어 빠른 드로잉에서도 끊김을 줄인다.
-- 결과 화면은 세로 스크롤 목록 대신 슬라이드(캐러셀) 뷰어로 그림을 넘겨 본다.
+핵심은 `실시간 공유`와 `턴별 저장`이 동시에 존재한다는 점이다.
 
-예시
+- 플레이어가 그리는 동안 stroke가 Firestore에 누적 저장된다.
+- 다른 플레이어는 `onSnapshot`으로 그 업데이트를 바로 반영한다.
+- 턴이 끝나면 그 플레이어의 canvas 문서가 해당 라운드의 최종 그림 결과로 남는다.
+- 다음 플레이어는 새 빈 canvas에서 시작한다.
+- 모든 턴이 끝난 뒤에는 플레이어별 결과 그림을 캐러셀 형태로 다시 확인할 수 있다.
 
-player1 -> 그림1 저장
-player2 -> 그림2 저장
-player3 -> 그림3 저장
+## 실시간 동기화가 어떤 식으로 일어나는지 설명
 
----
+실시간 동기화는 Firestore의 문서/컬렉션 구독으로 처리한다.
 
-# 🧰 기술 스택
+- `rooms/{roomId}`: 현재 게임 상태, 턴, 타이머 기준 정보
+- `rooms/{roomId}/players`: 참가자 목록, 생존 여부, 역할 배정 결과
+- `rooms/{roomId}/drawingsByPlayer`: 플레이어별 stroke 누적 데이터
+- `rooms/{roomId}/votes`: 투표 데이터
 
-Frontend
-- Next.js
-- TypeScript
-- Tailwind CSS
+게임 화면에서는 `room`, `players`, `drawingsByPlayer`, `votes`를 각각 `onSnapshot`으로 구독한다. 따라서 현재 턴 플레이어가 stroke를 추가하면 다른 플레이어도 거의 즉시 같은 그림 변화를 본다.
 
-State Management
-- Zustand
+## Firebase가 어떤 역할을 하는지 설명
 
-Backend
-- Firebase
-- Firestore 또는 Realtime Database
+Firebase Firestore는 이 프로젝트의 실시간 멀티플레이 상태 저장소다.
 
-Canvas
-- HTML Canvas API
+- 방 생성, 입장, 종료 처리
+- 플레이어 역할 및 생존 상태 관리
+- 턴 순서와 게임 상태 전환
+- 플레이어별 그림 stroke 저장 및 실시간 전파
+- 투표 저장과 집계용 데이터 제공
 
-UI
-- shadcn/ui
+이 프로젝트는 현재 Firestore를 사용하며 Realtime Database는 사용하지 않는다.
 
----
+## 로컬 실행 방법
 
-# 📁 프로젝트 구조
-
-root
-├ src
-│  ├ app
-│  ├ components
-│  ├ hooks
-│  ├ store
-│  ├ firebase
-│  ├ types
-│  ├ utils
-│  └ constants
-│
-├ copilot-instructions.md
-├ GAME_DESIGN.md
-├ FIREBASE_SCHEMA.md
-├ ARCHITECTURE.md
-├ TASK_LIST.md
-
----
-
-# ⚙️ 설치 방법
-
-### 1. 프로젝트 클론
-
-git clone <repo-url>
-cd draw-mafia
-
----
-
-### 2. 패키지 설치
-
+```bash
 npm install
-
----
-
-### 3. 환경변수 설정
-
-`.env.local` 파일 생성
-
-cp .env.example .env.local
-
-Firebase 콘솔에서 받은 값 입력
-
----
-
-### 4. 개발 서버 실행
-
 npm run dev
+```
 
-브라우저에서
+브라우저에서 `http://localhost:3000`으로 접속한다.
 
-[http://localhost:3000](http://localhost:3000)
+프로덕션 빌드 확인:
 
-접속
+```bash
+npm run build
+```
 
----
+## 환경변수 설명
 
-# 🔥 Firebase 설정
+`.env.local`에 아래 값을 설정해야 한다.
 
-Firebase 콘솔에서 다음 작업이 필요하다.
+```env
+NEXT_PUBLIC_FIREBASE_API_KEY=
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
+NEXT_PUBLIC_FIREBASE_APP_ID=
+```
 
-1️⃣ Firebase 프로젝트 생성
+모든 값은 Firebase Console의 Web App 설정에서 가져온다.
 
-2️⃣ Web App 등록
+## 주요 디렉터리
 
-3️⃣ Firestore 또는 Realtime Database 활성화
+```text
+src/
+	app/                  라우트 페이지
+	components/           캔버스, 모달, 공통 UI
+	constants/            게임 상수 및 제시어 데이터
+	firebase/             Firebase 초기화
+	types/                도메인 타입
+	utils/                플레이어, 방 코드, 예외 처리 유틸
+```
 
-4️⃣ Authentication 설정 (선택)
+## 함께 보는 문서
 
----
-
-# ⚠️ 주의
-
-`.env.local` 파일은 절대 GitHub에 업로드하면 안 된다.
-
----
-
-# 🚀 향후 기능
-
-- AI 플레이어
-- 그림 리플레이
-- 모바일 최적화
-- 사운드 효과
-- 방 비밀번호
-- 랭킹 시스템
-
----
-
-# 🤖 AI 개발 규칙
-
-이 프로젝트는 다음 문서를 기준으로 개발된다.
-
-- copilot-instructions.md
-- GAME_DESIGN.md
-- FIREBASE_SCHEMA.md
-- ARCHITECTURE.md
-- TASK_LIST.md
-
-AI는 이 문서를 참고하여 코드를 생성해야 한다.
-
----
+- `copilot-instructions.md`
+- `GAME_DESIGN.md`
+- `FIREBASE_SCHEMA.md`
+- `ARCHITECTURE.md`
+- `TASK_LIST.md`

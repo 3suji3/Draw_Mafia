@@ -8,7 +8,24 @@ export type PromptCategory =
   | "음식"
   | "장소"
   | "자연"
-  | "물건";
+  | "물건"
+  | "생활용품"
+  | "의류/패션";
+
+export const PROMPT_CATEGORIES: PromptCategory[] = [
+  "동물",
+  "사람",
+  "직업",
+  "탈것",
+  "스포츠",
+  "학용품",
+  "음식",
+  "장소",
+  "자연",
+  "물건",
+  "생활용품",
+  "의류/패션",
+];
 
 export type PromptPair = {
   citizenAction: string;

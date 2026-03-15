@@ -1,262 +1,111 @@
 # Copilot Instructions – 그림마피아 (Draw Mafia)
 
-이 프로젝트는 **실시간 멀티플레이 웹 게임 "그림마피아"**를 구현하는 프로젝트이다.
+## 1. 프로젝트 목표
 
-AI 코드 생성은 반드시 이 문서를 기준으로 해야 한다.
+이 프로젝트는 Firestore 기반 실시간 멀티플레이 그림 추리 게임이다. 반드시 현재 실제 게임 규칙과 문서를 일치시키는 방향으로 작업한다.
 
-절대로 이 규칙을 무시하고 임의의 구조나 라이브러리를 추가하지 말 것.
+핵심 목표:
 
----
+- 방 생성 / 방 입장
+- 실시간 대기방 동기화
+- 시민 / 마피아 역할 분배
+- PromptPair 기반 완성형 제시어 시스템
+- 턴 기반 그림판
+- 실시간 그림 공유
+- 플레이어별 턴 그림 저장
+- 투표 / 결과 / 승패 판정
 
-# 1. 프로젝트 목표
+## 2. 기술 스택
 
-이 프로젝트는 다음을 목표로 한다.
-
-- 실시간 멀티플레이 그림 마피아 게임
-- 최대 10명 플레이
-- 방코드 기반 입장 시스템
-- 실시간 그림판
-- 턴 기반 게임 진행
-- 투표 시스템
-- 승패 판정
-
----
-
-# 2. 기술 스택
-
-AI는 아래 기술 스택을 기준으로 코드를 작성해야 한다.
-
-Frontend
-- Next.js (App Router)
+- Next.js App Router
 - TypeScript
 - Tailwind CSS
+- Firebase Firestore
+- HTML Canvas 직접 구현
+- Radix Dialog 기반 모달 UI
 
-State Management
-- Zustand
+주의:
 
-Realtime Backend
-- Firebase
-  - Firestore 또는 Realtime Database
+- Realtime Database를 전제로 가정하지 않는다.
+- Canvas 라이브러리(Fabric.js, Konva 등)로 임의 교체하지 않는다.
 
-UI
-- shadcn/ui 또는 Radix UI
-- alert() 사용 금지
-- 반드시 중앙 모달(Dialog) 사용
+## 3. 반드시 지켜야 할 게임 규칙
 
-Canvas
-- HTML Canvas API
+### 3-1. 제시어 규칙
 
----
+- 시민: `행동 + 피사체`
+- 마피아: 시민 제시어와 유사하지만 다른 `행동 + 피사체`
+- 마피아에게 행동만 또는 피사체만 주는 부분 힌트 규칙은 사용하지 않는다.
 
-# 3. 개발 원칙
+### 3-2. 그림판 규칙
 
-이 프로젝트는 **Vibe Coding 기반 개발**이다.
+- 현재 턴 플레이어만 입력 가능
+- 다른 플레이어는 현재 그려지는 과정을 실시간으로 본다
+- stroke는 플레이어별 `drawingsByPlayer` 문서에 누적 저장된다
+- 턴 종료 후 그 문서가 해당 플레이어의 라운드 결과 그림으로 남는다
 
-AI는 아래 원칙을 반드시 지켜야 한다.
+### 3-3. 시간 규칙
 
-### 1️⃣ 단계별 구현
+- draw time: 30초 또는 60초
+- vote time: 30초
+- mafia guess time: 20초
 
-한 번에 모든 코드를 생성하지 않는다.
+## 4. 데이터 구조 규칙
 
-항상 아래 순서를 따른다.
+### room.prompt
 
-1. 구조 설계
-2. MVP 기능 구현
-3. 확장 기능 추가
+반드시 `PromptPair` 구조를 사용한다.
 
-### 2️⃣ 작은 단위 코드 생성
+```ts
+type PromptPair = {
+  citizenAction: string;
+  mafiaAction: string;
+  citizenSubject: string;
+  mafiaSubject: string;
+  category: string;
+};
+```
 
-AI는 한 번에 너무 많은 파일을 생성하지 않는다.
+### prompt source data
 
-항상 다음 형식으로 답변한다.
+- `ACTION_PAIRS`
+- `SUBJECT_PAIRS`
+- `allowedCategories`
+- `getRandomPromptPair()`
 
-1. 생성할 파일 목록
-2. 각 파일 역할 설명
-3. 파일 코드
+무작정 완성형 pair를 나열하는 것보다 조합 가능한 데이터 구조를 우선한다.
 
-### 3️⃣ 상태 꼬임 방지
+## 5. 문서 동기화 규칙
 
-이 프로젝트는 **실시간 멀티플레이 게임**이므로
+아래 파일 중 하나의 규칙 설명을 바꾸면 나머지도 함께 확인한다.
 
-게임 상태는 반드시 중앙 상태 구조로 관리한다.
+- `README.md`
+- `copilot-instructions.md`
+- `GAME_DESIGN.md`
+- `FIREBASE_SCHEMA.md`
+- `ARCHITECTURE.md`
+- `TASK_LIST.md`
 
-게임 상태 예시
+특히 아래 문구는 문서마다 동일한 의미를 유지해야 한다.
 
-waiting
-playing
-voting
-result
-ended
+- 상태 흐름: `waiting -> playing -> voting -> result -> ended`
+- 그림판 구조: `실시간 공유 + 턴별 저장`
+- 제시어 규칙: `시민/마피아 모두 완성형 제시어`
 
----
+## 6. 구현 원칙
 
-# 4. 폴더 구조 규칙
+- 실제 코드 구조를 먼저 읽고 수정한다.
+- 필요 없는 전면 리디자인이나 구조 갈아엎기는 하지 않는다.
+- Firestore 구조를 불필요하게 크게 바꾸지 않는다.
+- 현재 코드가 사용하는 흐름과 문서를 맞춘다.
+- 대량 데이터 확장은 유지보수 가능한 형태로 작성한다.
 
-AI는 아래 폴더 구조를 유지해야 한다.
+## 7. UI / 입력 원칙
 
-src
-├ app
-│  ├ page.tsx
-│  ├ room
-│  │  └ [roomId]
-│  │      └ page.tsx
-│  └ game
-│      └ [roomId]
-│          └ page.tsx
-│
-├ components
-│  ├ ui
-│  ├ canvas
-│  ├ modals
-│  └ room
-│
-├ hooks
-│
-├ store
-│  └ gameStore.ts
-│
-├ firebase
-│  └ firebase.ts
-│
-├ types
-│
-├ utils
-│
-└ constants
-
-AI는 임의로 폴더 구조를 변경하지 않는다.
-
----
-
-# 5. 데이터 모델 규칙
-
-Firebase에는 다음 구조를 사용한다.
-
-rooms
-└ roomId
-├ hostId
-├ status
-├ players
-├ turnIndex
-├ round
-├ drawingData
-├ votes
-└ prompt
-
-players 구조
-
-players
-└ playerId
-├ nickname
-├ role
-├ alive
-└ isHost
-
----
-
-# 6. 게임 규칙
-
-### 플레이어 수
-
-최소 3명  
-최대 10명
-
-테스트 모드에서는 1명도 허용한다.
-
----
-
-### 역할
-
-플레이어 역할
-
-- 시민
-- 마피아
-
----
-
-### 제시어 규칙
-
-제시어는 항상 완성형 쌍으로 제공한다.
-
-- 시민: 행동 + 피사체 (예: 먹는 고양이)
-- 마피아: 시민 제시어와 유사하지만 다른 행동 + 피사체 (예: 마시는 강아지)
-
-마피아에게 시민 제시어의 일부(행동만/피사체만)를 제공하지 않는다.
-
----
-
-### 턴 진행
-
-1. 턴 순서는 게임 시작 시 랜덤
-2. 한 턴에 한 명만 그림을 그림
-3. 타이머 종료 시 자동으로 다음 턴
-4. 모든 생존 플레이어가 한 번씩 그림을 그리면 투표 단계로 이동
-
----
-
-### 그림판 기능
-
-기본 기능
-
-- 펜
-- 지우개
-- 색 선택
-
-Canvas 기반 구현
-
-stroke 데이터를 저장하고 실시간 공유한다.
-
----
-
-# 7. 투표 규칙
-
-모든 턴 종료 후 **60초 투표 시간**
-
-플레이어는
-
-- 다른 플레이어 선택
-- "넘어가기" 선택
-
-가능하다.
-
----
-
-### 투표 결과
-
-다음 조건 중 하나면 아무도 죽지 않는다.
-
-- 동률
-- 넘어가기 최다
-
-그 외
-
-최다 득표자 탈락
-
-정체 공개
-
----
-
-# 8. 승리 조건
-
-마피아가 시민과 1:1이 되면
-
-→ 마피아 승리
-
-시민이 마피아를 잡았을 경우
-
-마피아에게 **제시어 맞추기 기회 제공**
-
-마피아가 틀리면
-
-→ 시민 승리
-
-마피아가 맞추면
-
-→ 마피아 승리
-
----
-
-# 9. UI 규칙
+- 모바일에서도 캔버스, 타이머, 투표 UI가 동작해야 한다.
+- 캔버스는 pointer 기반 입력을 우선한다.
+- 버튼 텍스트는 작은 화면에서도 줄바꿈되지 않게 유지한다.
+- 시스템 피드백은 모달, 토스트, 인라인 상태 UI로 처리하고 `alert()`는 사용하지 않는다.
 
 alert() 사용 금지
 
