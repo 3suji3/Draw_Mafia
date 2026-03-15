@@ -14,6 +14,7 @@ import {
   updateDoc,
   writeBatch,
 } from "firebase/firestore";
+import { ChatPanel } from "@/components/chat";
 import { GameDialog } from "@/components/modals/GameDialog";
 import { Button, Card, LoadingSpinner, ToastStack } from "@/components/ui";
 import { getRandomPromptPair } from "@/constants/promptPairs";
@@ -492,6 +493,12 @@ export default function RoomPage() {
               >
                 {copyingRoomCode ? "복사 중..." : "방코드 복사"}
               </Button>
+              <ChatPanel
+                roomId={resolvedRoomId}
+                playerId={playerId}
+                nickname={currentPlayer?.nickname ?? storedNickname ?? "익명"}
+                isEnabled={true}
+              />
             </div>
           </div>
 

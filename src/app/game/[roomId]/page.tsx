@@ -18,6 +18,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { CanvasBoard } from "@/components/canvas";
+import { ChatPanel } from "@/components/chat";
 import { GameDialog } from "@/components/modals/GameDialog";
 import { Button, Card, LoadingSpinner, ToastStack } from "@/components/ui";
 import { MAFIA_GUESS_TIME_SECONDS, VOTE_TIME_SECONDS } from "@/constants/game";
@@ -1520,6 +1521,17 @@ export default function GamePage() {
               >
                 {soundEnabled ? "SOUND ON" : "SOUND OFF"}
               </Button>
+              <ChatPanel
+                roomId={resolvedRoomId}
+                playerId={playerId}
+                nickname={currentPlayer?.nickname ?? "익명"}
+                isEnabled={room?.status === "voting"}
+                disabledReason={
+                  room?.status === "playing"
+                    ? "그림을 그리는 중에는 채팅할 수 없어요"
+                    : "채팅은 대기방과 투표 단계에서만 가능합니다"
+                }
+              />
               <Button
                 type="button"
                 onClick={handleLeaveRoom}
