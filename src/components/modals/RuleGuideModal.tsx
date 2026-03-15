@@ -10,8 +10,8 @@ type RuleGuideModalProps = {
 
 const RULE_SECTIONS = [
   "플레이어 중 1명은 마피아, 나머지는 시민입니다.",
-  "시민은 '행동 + 피사체' 형태의 완성형 제시어를 받습니다. (예: 먹는 고양이)",
-  "마피아는 시민 제시어와 헷갈릴 수 있도록 유사하지만 다른 완성형 제시어를 받습니다. (예: 마시는 강아지)",
+  "시민은 '행동 + 피사체' 형태의 완성형 제시어를 받습니다. (예: 운전하는 자동차)",
+  "마피아는 시민 제시어와 헷갈릴 수 있도록 유사하지만 다른 완성형 제시어를 받습니다. (예: 조종하는 비행기)",
   "각 플레이어는 자기 턴에 본인의 제시어를 그림으로 표현합니다.",
   "다른 플레이어는 그림이 그려지는 과정을 실시간으로 볼 수 있습니다.",
   "모든 생존 플레이어가 그림을 마치면 투표 단계로 이동합니다.",
@@ -56,11 +56,11 @@ export function RuleGuideModal({ open, onOpenChange }: RuleGuideModalProps) {
               <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <div className="rounded-xl border border-dm-primary/30 bg-dm-primary/10 p-3">
                   <p className="text-xs font-semibold text-dm-primary">시민</p>
-                  <p className="mt-1 text-sm font-semibold text-dm-text-primary">먹는 고양이</p>
+                  <p className="mt-1 text-sm font-semibold text-dm-text-primary">운전하는 자동차</p>
                 </div>
                 <div className="rounded-xl border border-dm-accent/30 bg-dm-accent/10 p-3">
                   <p className="text-xs font-semibold text-dm-accent">마피아</p>
-                  <p className="mt-1 text-sm font-semibold text-dm-text-primary">마시는 강아지</p>
+                  <p className="mt-1 text-sm font-semibold text-dm-text-primary">조종하는 비행기</p>
                 </div>
               </div>
             </CardLike>

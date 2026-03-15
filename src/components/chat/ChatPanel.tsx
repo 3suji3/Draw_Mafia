@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useChat } from "@/hooks/useChat";
 import { CHAT_EMOJI_LIST, CHAT_MAX_LENGTH } from "@/types/chat";
 
@@ -34,6 +35,7 @@ export function ChatPanel({ roomId, playerId, nickname, isEnabled, disabledReaso
   const [sending, setSending] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isTabletUp, setIsTabletUp] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [showNewMessageHint, setShowNewMessageHint] = useState(false);
   const [pendingNewMessageCount, setPendingNewMessageCount] = useState(0);
   const [isInputFocused, setIsInputFocused] = useState(false);
@@ -45,6 +47,10 @@ export function ChatPanel({ roomId, playerId, nickname, isEnabled, disabledReaso
   const isNearBottomRef = useRef(true);
 
   const { messages, sendMessage } = useChat(roomId);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(TABLET_MEDIA_QUERY);
@@ -188,6 +194,179 @@ export function ChatPanel({ roomId, playerId, nickname, isEnabled, disabledReaso
     return null;
   }
 
+  const panelLayer =
+    open && mounted
+      ? createPortal(
+          <>
+            <button
+              type="button"
+              aria-label="채팅 닫기 배경"
+              onClick={handleClose}
+              className="fixed inset-0 z-40 hidden cursor-default md:block"
+            />
+
+            <aside
+              className="fixed inset-y-0 right-0 z-50 hidden w-80 flex-col border-l shadow-dm-soft md:flex"
+              style={{
+                borderColor: "rgb(var(--dm-card-border))",
+                backgroundColor: "rgb(var(--dm-card))",
+              }}
+            >
+              <div
+                className="flex shrink-0 items-center justify-between px-4 py-3"
+                style={{ borderBottom: "1px solid rgb(var(--dm-card-border))" }}
+              >
+                <span className="text-sm font-semibold text-dm-text-primary">채팅</span>
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  aria-label="채팅 닫기"
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-dm-text-secondary transition hover:text-dm-text-primary"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="relative min-h-0 flex-1">
+                <div
+                  ref={messagesContainerRef}
+                  onScroll={syncIsNearBottom}
+                  className="h-full overflow-y-auto p-3"
+                >
+                  {messages.length === 0 ? (
+                    <p className="mt-10 text-center text-xs text-dm-text-secondary">
+                      아직 채팅이 없습니다.
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {messages.map((msg) => {
+                        const isMine = msg.playerId === playerId;
+                        return (
+                          <li
+                            key={msg.id}
+                            className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}
+                          >
+                            {!isMine ? (
+                              <span className="mb-0.5 text-[10px] font-medium text-dm-text-secondary">
+                                {msg.nickname}
+                              </span>
+                            ) : null}
+                            <div
+                              className={`max-w-[85%] break-words rounded-2xl px-3 py-2 text-sm leading-snug ${
+                                isMine ? "rounded-br-sm" : "rounded-bl-sm"
+                              }`}
+                              style={{
+                                backgroundColor: isMine
+                                  ? "rgb(var(--dm-primary) / 0.22)"
+                                  : "rgb(var(--dm-card-muted))",
+                                color: "rgb(var(--dm-text-primary))",
+                              }}
+                            >
+                              {msg.message}
+                            </div>
+                            <span className="mt-0.5 text-[9px] text-dm-text-secondary/55">
+                              {formatTime(msg.createdAt)}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {showNewMessageHint ? (
+                  <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center px-3">
+                    <button
+                      type="button"
+                      onClick={handleScrollToBottom}
+                      className="pointer-events-auto rounded-full border border-dm-primary/35 bg-dm-card/95 px-3 py-1.5 text-[11px] font-semibold text-dm-primary shadow-dm-soft transition hover:bg-dm-primary/10"
+                    >
+                      새 메시지 {pendingNewMessageCount > 0 ? `${pendingNewMessageCount}개` : ""} 있습니다
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+
+              <div
+                className="flex shrink-0 flex-wrap gap-0.5 px-2 py-1.5"
+                style={{ borderTop: "1px solid rgb(var(--dm-card-border))" }}
+              >
+                {CHAT_EMOJI_LIST.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => handleEmojiClick(emoji)}
+                    disabled={!isEnabled}
+                    aria-label={`이모지 ${emoji} 입력`}
+                    className="flex h-11 w-11 items-center justify-center rounded-lg text-lg transition hover:bg-dm-primary/10 active:scale-90 disabled:cursor-not-allowed disabled:opacity-35"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+
+              <div
+                className="shrink-0 px-3 pb-4 pt-2"
+                style={{ borderTop: "1px solid rgb(var(--dm-card-border))" }}
+              >
+                {!isEnabled && disabledReason ? (
+                  <p className="mb-2 text-center text-[11px] text-dm-text-secondary">
+                    {disabledReason}
+                  </p>
+                ) : null}
+                <div className="flex gap-2">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={inputValue}
+                    onChange={(e) => {
+                      if (e.target.value.length <= CHAT_MAX_LENGTH) {
+                        setInputValue(e.target.value);
+                      }
+                    }}
+                    onKeyDown={handleKeyDown}
+                    onFocus={() => setIsInputFocused(true)}
+                    onBlur={() => setIsInputFocused(false)}
+                    placeholder={isEnabled ? "메시지 입력..." : "채팅 불가"}
+                    disabled={!isEnabled}
+                    maxLength={CHAT_MAX_LENGTH}
+                    className="dm-input flex-1 disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleSend()}
+                    disabled={!isEnabled || !inputValue.trim() || sending}
+                    className="inline-flex shrink-0 items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold text-white transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{ backgroundColor: "rgb(var(--dm-primary))" }}
+                  >
+                    전송
+                  </button>
+                </div>
+                {isEnabled ? (
+                  <p className="mt-1 text-right text-[10px] text-dm-text-secondary/55">
+                    {inputValue.length} / {CHAT_MAX_LENGTH}
+                  </p>
+                ) : null}
+              </div>
+            </aside>
+          </>,
+          document.body
+        )
+      : null;
+
   return (
     <>
       <button
@@ -217,174 +396,7 @@ export function ChatPanel({ roomId, playerId, nickname, isEnabled, disabledReaso
         ) : null}
       </button>
 
-      {open ? (
-        <>
-          <button
-            type="button"
-            aria-label="채팅 닫기 배경"
-            onClick={handleClose}
-            className="fixed inset-0 z-40 hidden cursor-default md:block"
-          />
-
-          <div
-            className="fixed inset-y-0 right-0 z-50 hidden w-80 flex-col border-l shadow-dm-soft md:flex"
-            style={{
-              borderColor: "rgb(var(--dm-card-border))",
-              backgroundColor: "rgb(var(--dm-card))",
-            }}
-          >
-          <div
-            className="flex shrink-0 items-center justify-between px-4 py-3"
-            style={{ borderBottom: "1px solid rgb(var(--dm-card-border))" }}
-          >
-            <span className="text-sm font-semibold text-dm-text-primary">채팅</span>
-            <button
-              type="button"
-              onClick={handleClose}
-              aria-label="채팅 닫기"
-              className="flex h-7 w-7 items-center justify-center rounded-md text-dm-text-secondary transition hover:text-dm-text-primary"
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                aria-hidden="true"
-              >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          </div>
-
-          <div className="relative min-h-0 flex-1">
-            <div
-              ref={messagesContainerRef}
-              onScroll={syncIsNearBottom}
-              className="h-full overflow-y-auto p-3"
-            >
-              {messages.length === 0 ? (
-                <p className="mt-10 text-center text-xs text-dm-text-secondary">
-                  아직 채팅이 없습니다.
-                </p>
-              ) : (
-                <ul className="space-y-2">
-                  {messages.map((msg) => {
-                    const isMine = msg.playerId === playerId;
-                    return (
-                      <li
-                        key={msg.id}
-                        className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}
-                      >
-                        {!isMine ? (
-                          <span className="mb-0.5 text-[10px] font-medium text-dm-text-secondary">
-                            {msg.nickname}
-                          </span>
-                        ) : null}
-                        <div
-                          className={`max-w-[85%] break-words rounded-2xl px-3 py-2 text-sm leading-snug ${
-                            isMine ? "rounded-br-sm" : "rounded-bl-sm"
-                          }`}
-                          style={{
-                            backgroundColor: isMine
-                              ? "rgb(var(--dm-primary) / 0.22)"
-                              : "rgb(var(--dm-card-muted))",
-                            color: "rgb(var(--dm-text-primary))",
-                          }}
-                        >
-                          {msg.message}
-                        </div>
-                        <span className="mt-0.5 text-[9px] text-dm-text-secondary/55">
-                          {formatTime(msg.createdAt)}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {showNewMessageHint ? (
-              <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center px-3">
-                <button
-                  type="button"
-                  onClick={handleScrollToBottom}
-                  className="pointer-events-auto rounded-full border border-dm-primary/35 bg-dm-card/95 px-3 py-1.5 text-[11px] font-semibold text-dm-primary shadow-dm-soft transition hover:bg-dm-primary/10"
-                >
-                  새 메시지 {pendingNewMessageCount > 0 ? `${pendingNewMessageCount}개` : ""} 있습니다
-                </button>
-              </div>
-            ) : null}
-          </div>
-
-          <div
-            className="flex shrink-0 flex-wrap gap-0.5 px-2 py-1.5"
-            style={{ borderTop: "1px solid rgb(var(--dm-card-border))" }}
-          >
-            {CHAT_EMOJI_LIST.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => handleEmojiClick(emoji)}
-                disabled={!isEnabled}
-                aria-label={`이모지 ${emoji} 입력`}
-                className="flex h-11 w-11 items-center justify-center rounded-lg text-lg transition hover:bg-dm-primary/10 active:scale-90 disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
-
-          <div
-            className="shrink-0 px-3 pb-4 pt-2"
-            style={{ borderTop: "1px solid rgb(var(--dm-card-border))" }}
-          >
-            {!isEnabled && disabledReason ? (
-              <p className="mb-2 text-center text-[11px] text-dm-text-secondary">
-                {disabledReason}
-              </p>
-            ) : null}
-            <div className="flex gap-2">
-              <input
-                ref={inputRef}
-                type="text"
-                value={inputValue}
-                onChange={(e) => {
-                  if (e.target.value.length <= CHAT_MAX_LENGTH) {
-                    setInputValue(e.target.value);
-                  }
-                }}
-                onKeyDown={handleKeyDown}
-                onFocus={() => setIsInputFocused(true)}
-                onBlur={() => setIsInputFocused(false)}
-                placeholder={isEnabled ? "메시지 입력..." : "채팅 불가"}
-                disabled={!isEnabled}
-                maxLength={CHAT_MAX_LENGTH}
-                className="dm-input flex-1 disabled:cursor-not-allowed disabled:opacity-50"
-              />
-              <button
-                type="button"
-                onClick={() => void handleSend()}
-                disabled={!isEnabled || !inputValue.trim() || sending}
-                className="inline-flex shrink-0 items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold text-white transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ backgroundColor: "rgb(var(--dm-primary))" }}
-              >
-                전송
-              </button>
-            </div>
-            {isEnabled ? (
-              <p className="mt-1 text-right text-[10px] text-dm-text-secondary/55">
-                {inputValue.length} / {CHAT_MAX_LENGTH}
-              </p>
-            ) : null}
-          </div>
-          </div>
-        </>
-      ) : null}
+      {panelLayer}
     </>
   );
 }
