@@ -19,6 +19,7 @@ import {
 } from "firebase/firestore";
 import { CanvasBoard } from "@/components/canvas";
 import { ChatPanel } from "@/components/chat";
+import { ConfirmDialog } from "@/components/modals/ConfirmDialog";
 import { GameDialog } from "@/components/modals/GameDialog";
 import { Button, Card, LoadingSpinner, ToastStack } from "@/components/ui";
 import { MAFIA_GUESS_TIME_SECONDS, VOTE_TIME_SECONDS } from "@/constants/game";
@@ -131,6 +132,7 @@ export default function GamePage() {
   const [mafiaGuessWord, setMafiaGuessWord] = useState("");
   const [clearingCanvas, setClearingCanvas] = useState(false);
   const [leavingRoom, setLeavingRoom] = useState(false);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [restartingGame, setRestartingGame] = useState(false);
   const [networkDelayed, setNetworkDelayed] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
@@ -1094,6 +1096,11 @@ export default function GamePage() {
     }
   };
 
+  const handleConfirmLeaveRoom = async () => {
+    setLeaveConfirmOpen(false);
+    await handleLeaveRoom();
+  };
+
   useEffect(() => {
     if (!room || room.status !== "playing" || !isHost) {
       return;
@@ -1534,7 +1541,7 @@ export default function GamePage() {
               />
               <Button
                 type="button"
-                onClick={handleLeaveRoom}
+                onClick={() => setLeaveConfirmOpen(true)}
                 disabled={leavingRoom}
                 variant="secondary"
                 className="min-w-[98px] px-2 py-1 text-[10px]"
@@ -1964,6 +1971,17 @@ export default function GamePage() {
         title="🎉 승리!"
         description={`축하합니다! ${currentPlayer?.nickname ?? "플레이어"}님이 승리 팀(${room?.winner === "mafia" ? "마피아" : "시민"})에 포함되었습니다.`}
         onOpenChange={setWinnerDialogOpen}
+      />
+
+      <ConfirmDialog
+        open={leaveConfirmOpen}
+        title="방을 나가시겠습니까?"
+        description="나가기를 누르면 현재 방에서 퇴장하고 홈으로 이동합니다."
+        confirmLabel="나가기"
+        cancelLabel="취소"
+        loading={leavingRoom}
+        onOpenChange={setLeaveConfirmOpen}
+        onConfirm={() => void handleConfirmLeaveRoom()}
       />
     </>
   );

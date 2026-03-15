@@ -15,6 +15,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { ChatPanel } from "@/components/chat";
+import { ConfirmDialog } from "@/components/modals/ConfirmDialog";
 import { GameDialog } from "@/components/modals/GameDialog";
 import { Button, Card, LoadingSpinner, ToastStack } from "@/components/ui";
 import { getRandomPromptPair } from "@/constants/promptPairs";
@@ -69,6 +70,7 @@ export default function RoomPage() {
   const [recoveringPlayer, setRecoveringPlayer] = useState(false);
   const [leavingRoom, setLeavingRoom] = useState(false);
   const [copyingRoomCode, setCopyingRoomCode] = useState(false);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [networkDelayed, setNetworkDelayed] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [toasts, setToasts] = useState<Array<{ id: string; message: string }>>([]);
@@ -443,6 +445,11 @@ export default function RoomPage() {
     }
   };
 
+  const handleConfirmLeaveRoom = async () => {
+    setLeaveConfirmOpen(false);
+    await handleLeaveRoom();
+  };
+
   const handleCopyRoomCode = async () => {
     if (!resolvedRoomId || copyingRoomCode || typeof window === "undefined") {
       return;
@@ -627,7 +634,7 @@ export default function RoomPage() {
               </Button>
               <Button
                 type="button"
-                onClick={handleLeaveRoom}
+                onClick={() => setLeaveConfirmOpen(true)}
                 disabled={leavingRoom}
                 variant="secondary"
                 className="w-full px-4 py-3 text-sm sm:w-auto"
@@ -646,6 +653,17 @@ export default function RoomPage() {
         title={dialog.title}
         description={dialog.description}
         onOpenChange={(open) => setDialog((prev) => ({ ...prev, open }))}
+      />
+
+      <ConfirmDialog
+        open={leaveConfirmOpen}
+        title="방을 나가시겠습니까?"
+        description="나가기를 누르면 현재 방에서 퇴장하고 홈으로 이동합니다."
+        confirmLabel="나가기"
+        cancelLabel="취소"
+        loading={leavingRoom}
+        onOpenChange={setLeaveConfirmOpen}
+        onConfirm={() => void handleConfirmLeaveRoom()}
       />
     </>
   );
