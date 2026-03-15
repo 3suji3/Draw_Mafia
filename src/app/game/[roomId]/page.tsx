@@ -20,6 +20,7 @@ import {
 import { CanvasBoard } from "@/components/canvas";
 import { GameDialog } from "@/components/modals/GameDialog";
 import { Button, Card, LoadingSpinner, ToastStack } from "@/components/ui";
+import { MAFIA_GUESS_TIME_SECONDS, VOTE_TIME_SECONDS } from "@/constants/game";
 import { getRandomPromptPair } from "@/constants/promptPairs";
 import { db } from "@/firebase/firebase";
 import type { CanvasTool, DrawingStroke, PlayerDrawing } from "@/types/canvas";
@@ -48,7 +49,6 @@ const MAFIA_GUESS_TIMER_STORAGE_PREFIX = "draw_mafia_mafia_guess_started";
 const VOTE_SKIP_TARGET = "skip";
 const SOUND_STORAGE_KEY = "draw_mafia_sound_enabled";
 const TEST_BOT_PREFIX = "bot";
-const MAFIA_GUESS_LIMIT_SECONDS = 30;
 
 function getTurnTimerKey(roomId: string, gameSession: number, round: number, turnIndex: number): string {
   return `${TIMER_STORAGE_PREFIX}_${roomId}_${gameSession}_${round}_${turnIndex}`;
@@ -611,11 +611,11 @@ export default function GamePage() {
 
   const voteRemainingSeconds = useMemo(() => {
     if (!room || room.status !== "voting" || !voteStartedAtMs) {
-      return room?.voteTime ?? 60;
+      return room?.voteTime ?? VOTE_TIME_SECONDS;
     }
 
     const elapsed = Math.max(0, Math.floor((nowMs - voteStartedAtMs) / 1000));
-    return Math.max(0, (room.voteTime ?? 60) - elapsed);
+    return Math.max(0, (room.voteTime ?? VOTE_TIME_SECONDS) - elapsed);
   }, [nowMs, room, voteStartedAtMs]);
 
   const drawTimerPercent = useMemo(() => {
@@ -631,20 +631,20 @@ export default function GamePage() {
       return 0;
     }
 
-    return Math.max(0, Math.min(100, (voteRemainingSeconds / (room.voteTime ?? 60)) * 100));
+    return Math.max(0, Math.min(100, (voteRemainingSeconds / (room.voteTime ?? VOTE_TIME_SECONDS)) * 100));
   }, [room, voteRemainingSeconds]);
 
   const mafiaGuessRemainingSeconds = useMemo(() => {
     if (!room || room.status !== "result" || !room.awaitingMafiaGuess || !mafiaGuessStartedAtMs) {
-      return MAFIA_GUESS_LIMIT_SECONDS;
+      return MAFIA_GUESS_TIME_SECONDS;
     }
 
     const elapsed = Math.max(0, Math.floor((nowMs - mafiaGuessStartedAtMs) / 1000));
-    return Math.max(0, MAFIA_GUESS_LIMIT_SECONDS - elapsed);
+    return Math.max(0, MAFIA_GUESS_TIME_SECONDS - elapsed);
   }, [mafiaGuessStartedAtMs, nowMs, room]);
 
   const mafiaGuessTimerPercent = useMemo(() => {
-    return Math.max(0, Math.min(100, (mafiaGuessRemainingSeconds / MAFIA_GUESS_LIMIT_SECONDS) * 100));
+    return Math.max(0, Math.min(100, (mafiaGuessRemainingSeconds / MAFIA_GUESS_TIME_SECONDS) * 100));
   }, [mafiaGuessRemainingSeconds]);
 
   const timerDisplay = useMemo(() => {
@@ -968,7 +968,7 @@ export default function GamePage() {
 
       if (eliminatedRole === "mafia") {
         updates.awaitingMafiaGuess = true;
-        updates.resultMessage = `${resultMessage} / 마피아에게 제시어 추측 기회가 주어집니다 (30초 제한).`;
+        updates.resultMessage = `${resultMessage} / 마피아에게 제시어 추측 기회가 주어집니다 (${MAFIA_GUESS_TIME_SECONDS}초 제한).`;
       } else if (mafiaAliveCount > 0 && mafiaAliveCount === citizenAliveCount) {
         updates.status = "ended";
         updates.winner = "mafia";
@@ -1209,7 +1209,7 @@ export default function GamePage() {
           status: "ended",
           winner: "citizen",
           awaitingMafiaGuess: false,
-          resultMessage: `마피아 추측 시간(30초) 초과, 시민 승리 / 시민 정답: ${toCitizenPromptText(latestRoom.prompt)} / 마피아 제시어: ${toMafiaPromptText(latestRoom.prompt)}`,
+          resultMessage: `마피아 추측 시간(${MAFIA_GUESS_TIME_SECONDS}초) 초과, 시민 승리 / 시민 정답: ${toCitizenPromptText(latestRoom.prompt)} / 마피아 제시어: ${toMafiaPromptText(latestRoom.prompt)}`,
         });
       } catch {
         autoFinalizedMafiaGuessTimeoutKeyRef.current = "";
@@ -1494,9 +1494,9 @@ export default function GamePage() {
 
   return (
     <>
-      <main className="h-screen overflow-hidden bg-dm-bg p-2 text-dm-text-primary sm:p-4">
-        <Card className="mx-auto flex h-full w-full max-w-[1500px] flex-col overflow-hidden p-2 sm:p-4" hover>
-          <div className="flex flex-wrap items-center justify-between gap-2">
+      <main className="min-h-dvh bg-dm-bg p-2 text-dm-text-primary sm:p-4 xl:h-screen xl:overflow-hidden">
+        <Card className="mx-auto flex min-h-[calc(100dvh-1rem)] w-full max-w-[1500px] flex-col p-2 sm:min-h-[calc(100dvh-2rem)] sm:p-4 xl:h-full xl:overflow-hidden" hover>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">DRAW MAFIA</h1>
               {isTestMode ? (
@@ -1505,7 +1505,7 @@ export default function GamePage() {
                 </span>
               ) : null}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${connectionClassName}`}>
                 {connectionLabel}
               </span>
@@ -1588,8 +1588,8 @@ export default function GamePage() {
             </div>
           ) : null}
 
-          <div className="mt-3 grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden xl:grid-cols-[minmax(0,1fr)_380px]">
-            <Card className="flex min-h-0 flex-col border-dm-accent/20 bg-dm-bg/40 p-3" hover>
+          <div className="mt-3 grid min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_380px] xl:overflow-hidden">
+            <Card className="flex min-h-[320px] flex-col border-dm-accent/20 bg-dm-bg/40 p-3 xl:min-h-0" hover>
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold text-dm-text-secondary">DRAW BOARD</h2>
                 <p className="text-[10px] text-dm-text-secondary">
@@ -1616,7 +1616,7 @@ export default function GamePage() {
                   />
                 ) : (
                   <div className="relative h-full w-full">
-                    <div className="grid h-full min-h-0 grid-cols-[1fr_2.6fr_1fr] gap-2">
+                    <div className="grid h-full min-h-0 grid-cols-[0.85fr_2.3fr_0.85fr] gap-2 sm:grid-cols-[1fr_2.6fr_1fr]">
                       <div className="flex min-h-0 flex-col">
                         <p className="truncate pb-1 text-[10px] text-dm-text-secondary text-left">
                           {prevGalleryDrawing?.playerName ?? ""}
@@ -1692,7 +1692,7 @@ export default function GamePage() {
               </div>
             </Card>
 
-            <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
+            <div className="flex min-h-0 flex-col gap-3 xl:overflow-y-auto xl:pr-1">
               <Card className="border-dm-accent/20 bg-dm-bg/40 p-3" hover>
                 <p className="text-[10px] font-semibold text-dm-text-secondary">현재 턴 플레이어</p>
                 <p className="mt-1 text-sm font-semibold text-dm-accent">{currentTurnPlayer?.nickname ?? "대기 중"}</p>
@@ -1702,12 +1702,12 @@ export default function GamePage() {
 
               <Card className="min-h-[190px] flex flex-1 flex-col overflow-hidden border-dm-accent/20 bg-dm-bg/40 p-3" hover>
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1 rounded-lg border border-dm-accent/20 bg-dm-bg/70 p-1">
+                  <div className="flex w-full items-center gap-1 rounded-lg border border-dm-accent/20 bg-dm-bg/70 p-1 sm:w-auto">
                     <Button
                       type="button"
                       variant={rightPanelTab === "players" ? "secondary" : "ghost"}
                       onClick={() => setRightPanelTab("players")}
-                      className="h-7 min-w-[74px] px-2 text-[10px]"
+                      className="h-9 flex-1 px-3 text-xs sm:h-7 sm:min-w-[74px] sm:flex-none sm:px-2 sm:text-[10px]"
                     >
                       플레이어
                     </Button>
@@ -1715,7 +1715,7 @@ export default function GamePage() {
                       type="button"
                       variant={rightPanelTab === "vote" ? "secondary" : "ghost"}
                       onClick={() => setRightPanelTab("vote")}
-                      className="h-7 min-w-[74px] px-2 text-[10px]"
+                      className="h-9 flex-1 px-3 text-xs sm:h-7 sm:min-w-[74px] sm:flex-none sm:px-2 sm:text-[10px]"
                     >
                       투표
                     </Button>
@@ -1751,7 +1751,7 @@ export default function GamePage() {
                 ) : (
                   <div className="mt-2 min-h-0 overflow-y-auto">
                     {room?.status === "voting" ? (
-                      <div className="grid grid-cols-1 gap-1">
+                      <div className="grid grid-cols-1 gap-2">
                         {alivePlayers.map((player) => (
                           <Button
                             key={player.id}
@@ -1759,7 +1759,7 @@ export default function GamePage() {
                             variant="ghost"
                             onClick={() => handleCastVote(player.id)}
                             disabled={!isAlive || Boolean(myVote) || submittingVote}
-                            className="flex items-center justify-between px-2 py-1 text-xs"
+                            className="flex min-h-11 items-center justify-between px-3 py-2 text-sm"
                           >
                             <span>{player.nickname}</span>
                             <span>투표</span>
@@ -1769,7 +1769,7 @@ export default function GamePage() {
                           type="button"
                           onClick={() => handleCastVote(VOTE_SKIP_TARGET)}
                           disabled={!isAlive || Boolean(myVote) || submittingVote}
-                          className="px-2 py-1 text-xs"
+                          className="min-h-11 px-3 py-2 text-sm"
                         >
                           넘어가기
                         </Button>
@@ -1851,8 +1851,8 @@ export default function GamePage() {
           </div>
 
           <Card className="relative z-20 mt-3 shrink-0 border-dm-accent/20 bg-dm-bg/40 p-3" hover>
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-[auto_1fr_auto] md:items-center">
-              <div className="flex items-center gap-2">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[auto_1fr_auto] md:items-center">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setTool("pen")}
@@ -1877,7 +1877,7 @@ export default function GamePage() {
                 </button>
               </div>
 
-              <div className="flex min-w-0 flex-wrap items-center gap-2 md:justify-center">
+              <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center md:justify-center">
                 <div className="flex items-center gap-1.5">
                   {colorPalette.map((paletteColor) => (
                     <button
@@ -1907,13 +1907,13 @@ export default function GamePage() {
                 </label>
               </div>
 
-              <div className="flex items-center gap-1 md:justify-end">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center md:justify-end">
                 <Button
                   type="button"
                   onClick={handleClearCanvas}
                   disabled={!canDrawNow || room?.status !== "playing" || clearingCanvas}
                   variant="ghost"
-                  className="min-w-[98px] px-3 py-2 text-xs"
+                  className="w-full min-w-[98px] px-3 py-2 text-xs sm:w-auto"
                 >
                   {clearingCanvas ? "지우는 중" : "전체 지우기"}
                 </Button>
@@ -1921,7 +1921,7 @@ export default function GamePage() {
                   type="button"
                   onClick={handleEndTurn}
                   disabled={!isMyTurn || endingTurn || room?.status !== "playing"}
-                  className="min-w-[98px] px-3 py-2 text-xs"
+                  className="w-full min-w-[98px] px-3 py-2 text-xs sm:w-auto"
                 >
                   {endingTurn ? "처리 중" : "턴 종료"}
                 </Button>

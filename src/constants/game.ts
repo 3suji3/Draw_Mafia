@@ -5,4 +5,5 @@ export const PLAYER_LIMITS = {
 } as const;
 
 export const DRAW_TIME_OPTIONS = [30, 60] as const;
-export const VOTE_TIME_SECONDS = 60;
+export const VOTE_TIME_SECONDS = 30;
+export const MAFIA_GUESS_TIME_SECONDS = 20;

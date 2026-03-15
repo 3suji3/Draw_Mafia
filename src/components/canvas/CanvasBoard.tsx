@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import type { CanvasTool, DrawingStroke } from "@/types/canvas";
 
 type CanvasBoardProps = {
@@ -94,6 +95,8 @@ export function CanvasBoard({
 }: CanvasBoardProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef<boolean>(false);
+  const activePointerIdRef = useRef<number | null>(null);
+  const devicePixelRatioRef = useRef(1);
   const [activePoints, setActivePoints] = useState<DrawingStroke["points"]>([]);
   const activePointsRef = useRef<DrawingStroke["points"]>([]);
 
@@ -109,6 +112,36 @@ export function CanvasBoard({
   useEffect(() => {
     activePointsRef.current = activePoints;
   }, [activePoints]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+
+    if (!canvas) {
+      return;
+    }
+
+    const syncCanvasResolution = () => {
+      const nextDevicePixelRatio = Math.max(window.devicePixelRatio || 1, 1);
+      devicePixelRatioRef.current = nextDevicePixelRatio;
+      canvas.width = Math.round(CANVAS_WIDTH * nextDevicePixelRatio);
+      canvas.height = Math.round(CANVAS_HEIGHT * nextDevicePixelRatio);
+
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        return;
+      }
+
+      context.setTransform(nextDevicePixelRatio, 0, 0, nextDevicePixelRatio, 0, 0);
+    };
+
+    syncCanvasResolution();
+    window.addEventListener("resize", syncCanvasResolution);
+
+    return () => {
+      window.removeEventListener("resize", syncCanvasResolution);
+    };
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -135,7 +168,7 @@ export function CanvasBoard({
     }
   }, [activeStroke, canvasBackgroundColor, strokes]);
 
-  const getPointFromEvent = (event: React.PointerEvent<HTMLCanvasElement>) => {
+  const getCanvasPoint = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
 
     if (!canvas) {
@@ -154,35 +187,57 @@ export function CanvasBoard({
     };
   };
 
-  const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!canDraw) {
-      return;
-    }
-
-    event.currentTarget.setPointerCapture(event.pointerId);
+  const beginStroke = (point: DrawingStroke["points"][number]) => {
     drawingRef.current = true;
-    setActivePoints([getPointFromEvent(event)]);
+    setActivePoints([point]);
   };
 
-  const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!canDraw || !drawingRef.current) {
-      return;
-    }
-
-    const nextPoint = getPointFromEvent(event);
-
+  const extendStroke = (point: DrawingStroke["points"][number]) => {
     setActivePoints((prev) => {
       const last = prev[prev.length - 1];
 
       if (!last) {
-        return [nextPoint];
+        return [point];
       }
 
-      return [...prev, ...interpolatePoints(last, nextPoint), nextPoint];
+      return [...prev, ...interpolatePoints(last, point), point];
     });
   };
 
-  const completeStroke = async () => {
+  const releasePointerCapture = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+      return;
+    }
+
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
+  const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!canDraw || !event.isPrimary) {
+      return;
+    }
+
+    event.preventDefault();
+    activePointerIdRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    beginStroke(getCanvasPoint(event));
+  };
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (
+      !canDraw ||
+      !drawingRef.current ||
+      !event.isPrimary ||
+      activePointerIdRef.current !== event.pointerId
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    extendStroke(getCanvasPoint(event));
+  };
+
+  const endStroke = async () => {
     const finalizedPoints = [...activePointsRef.current];
 
     if (!canDraw || finalizedPoints.length < 1) {
@@ -211,16 +266,30 @@ export function CanvasBoard({
     }
 
     drawingRef.current = false;
-    await completeStroke();
+    activePointerIdRef.current = null;
+    await endStroke();
   };
 
-  const handlePointerCancel = async () => {
-    if (!drawingRef.current) {
+  const handlePointerUpEvent = async (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!event.isPrimary || activePointerIdRef.current !== event.pointerId) {
       return;
     }
 
+    event.preventDefault();
+    releasePointerCapture(event);
+    await handlePointerUp();
+  };
+
+  const handlePointerCancel = async (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!drawingRef.current || activePointerIdRef.current !== event.pointerId) {
+      return;
+    }
+
+    event.preventDefault();
+    releasePointerCapture(event);
     drawingRef.current = false;
-    await completeStroke();
+    activePointerIdRef.current = null;
+    await endStroke();
   };
 
   useEffect(() => {
@@ -229,17 +298,28 @@ export function CanvasBoard({
     }
   }, [activePoints.length, canDraw]);
 
+  useEffect(() => {
+    if (canDraw) {
+      return;
+    }
+
+    drawingRef.current = false;
+    activePointerIdRef.current = null;
+  }, [canDraw]);
+
   return (
-    <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-xl border border-dm-accent/20 bg-dm-card">
+    <div
+      className="flex h-full w-full items-center justify-center overflow-hidden rounded-xl border border-dm-accent/20 bg-dm-card"
+      style={{ touchAction: canDraw ? "none" : "auto" }}
+    >
       <div className="aspect-video h-full w-full max-h-full max-w-full">
         <canvas
           ref={canvasRef}
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
           className={`h-full w-full touch-none ${canDraw ? "cursor-crosshair" : "cursor-not-allowed opacity-80"}`}
+          style={{ touchAction: canDraw ? "none" : "auto" }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
+          onPointerUp={handlePointerUpEvent}
           onPointerCancel={handlePointerCancel}
           onPointerLeave={handlePointerCancel}
         />
