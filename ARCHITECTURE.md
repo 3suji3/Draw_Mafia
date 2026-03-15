@@ -87,6 +87,17 @@ ACTION_PAIRS
 - `voting`, `result`: 플레이어별 그림을 캐러셀처럼 넘겨 보며 비교
 - `ended`: 승리 팀, 승리자, 시민/마피아 제시어 공개
 
+## 11. 채팅 상태 제어
+
+채팅은 `ChatPanel` 컴포넌트가 담당하며, `isEnabled` prop으로 상태를 제어한다.
+
+- `waiting`: `isEnabled={true}` — 채팅 가능
+- `playing`: `isEnabled={false}` — 채팅 불가, 안내 문구 표시
+- `voting`: `isEnabled={true}` — 채팅 가능
+- 그 외: `isEnabled={false}`
+
+메시지는 `rooms/{roomId}/messages` subcollection에 실시간 저장된다.
+
 ## 10. 문서 동기화 원칙
 
 아래 문서는 항상 같은 규칙을 공유해야 한다.

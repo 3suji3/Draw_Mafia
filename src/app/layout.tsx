@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { ThemeToggle } from "@/components/ui";
+import { ConditionalThemeToggle } from "@/components/ui";
 import "./globals.css";
 
 const inter = Inter({
@@ -26,7 +26,7 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className={inter.className}>
-        <ThemeToggle />
+        <ConditionalThemeToggle />
         {children}
       </body>
     </html>

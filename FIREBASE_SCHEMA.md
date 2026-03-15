@@ -8,6 +8,7 @@ rooms/
 		players/
 		drawingsByPlayer/
 		votes/
+		messages/
 ```
 
 이 프로젝트는 Firestore를 사용한다. 실시간 업데이트는 각 문서/컬렉션을 `onSnapshot`으로 구독하는 방식으로 처리한다.
@@ -47,7 +48,7 @@ type Room = {
 
 - `status`: 현재 게임 단계
 - `drawTime`: 대기방에서 선택하는 그림 시간
-- `voteTime`: 투표 시간, 현재 기본값 30초
+- `voteTime`: 투표 시간, 현재 기본값 60초 (전원 투표 시 즉시 종료)
 - `turnOrder`, `turnIndex`: 턴 진행 제어
 - `prompt`: 시민/마피아 각각에게 지급할 완성형 제시어 쌍
 - `awaitingMafiaGuess`: 마피아 탈락 후 정답 입력 단계 여부
@@ -144,6 +145,27 @@ type Vote = {
 ## 7. 파생 상태
 
 아래 값은 Firestore에 별도 저장하지 않고 클라이언트에서 계산한다.
+## 6-1. messages subcollection
+
+경로:
+
+```text
+rooms/{roomId}/messages/{auto-id}
+```
+
+```ts
+type ChatMessage = {
+	playerId: string;
+	nickname: string;
+	message: string;
+	createdAt: timestamp;
+};
+```
+
+- `createdAt` 오름차순으로 정렬한다.
+- 채팅은 `waiting`과 `voting` 상태에서만 클라이언트측에서 허용한다.
+- 메시지는 최대 200자로 제한한다.
+
 
 - `alivePlayers`
 - `currentTurnPlayer`
