@@ -626,14 +626,6 @@ export default function RoomPage() {
             <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
               <Button
                 type="button"
-                onClick={() => router.push("/")}
-                variant="ghost"
-                className="w-full px-4 py-3 text-sm sm:w-auto"
-              >
-                홈으로 돌아가기
-              </Button>
-              <Button
-                type="button"
                 onClick={() => setLeaveConfirmOpen(true)}
                 disabled={leavingRoom}
                 variant="secondary"
