@@ -9,9 +9,14 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://draw-mafia.vercel.app"),
   title: "Draw Mafia",
   description: "실시간 멀티플레이 그림 추리 게임",
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
+    url: "/",
     title: "Draw Mafia",
     description: "실시간 멀티플레이 그림 추리 게임",
     type: "website",
