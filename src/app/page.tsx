@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
@@ -24,6 +24,7 @@ import mafiaImage from "@/public/mafia.png";
 
 const DEFAULT_DRAW_TIME = DRAW_TIME_OPTIONS[0];
 const MAX_ROOM_CODE_RETRY = 10;
+const THEME_STORAGE_KEY = "draw_mafia_theme";
 
 type DialogState = {
   open: boolean;
@@ -67,6 +68,7 @@ export default function HomePage() {
   const [dialog, setDialog] = useState<DialogState>(INITIAL_DIALOG);
   const [ruleModalOpen, setRuleModalOpen] = useState(false);
   const [testQuerySuffix, setTestQuerySuffix] = useState("");
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
     const storedNickname = getStoredNickname();
@@ -84,6 +86,29 @@ export default function HomePage() {
     const result = resolveTestMode(new URLSearchParams(window.location.search));
     setTestQuerySuffix(result.testQuerySuffix);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const root = document.documentElement;
+
+    const syncTheme = () => {
+      const hasLightClass = root.classList.contains("light");
+      const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+      setTheme(hasLightClass || storedTheme === "light" ? "light" : "dark");
+    };
+
+    syncTheme();
+
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+
+    return () => observer.disconnect();
+  }, []);
+
+  const isLightTheme = theme === "light";
 
   const openDialog = (title: string, description: string) => {
     setDialog({ open: true, title, description });
@@ -269,106 +294,126 @@ export default function HomePage() {
     <>
       <main className="relative min-h-screen overflow-hidden bg-dm-bg px-4 py-8 text-dm-text-primary sm:px-6 sm:py-10">
         <div className="pointer-events-none absolute inset-0">
-          <div className="absolute -left-12 top-16 h-56 w-56 rounded-full bg-dm-primary/20 blur-3xl" />
-          <div className="absolute right-0 top-4 h-72 w-72 rounded-full bg-dm-secondary/20 blur-3xl" />
-          <div className="absolute bottom-10 left-1/3 h-60 w-60 rounded-full bg-dm-accent/20 blur-3xl" />
+          {!isLightTheme ? (
+            <>
+              <div className="absolute inset-0 bg-[radial-gradient(1100px_circle_at_15%_0%,rgba(59,130,246,0.12),transparent_44%),radial-gradient(900px_circle_at_88%_12%,rgba(239,68,68,0.11),transparent_42%),linear-gradient(180deg,rgba(2,6,23,0.6)_0%,rgba(2,6,23,0.25)_42%,rgba(0,0,0,0.45)_100%)]" />
+              <div className="absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-slate-900/55 to-transparent" />
+              <div className="absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-black/45 to-transparent" />
+            </>
+          ) : (
+            <>
+              <div className="absolute inset-0 bg-[radial-gradient(850px_circle_at_10%_2%,rgba(125,211,252,0.25),transparent_42%),radial-gradient(820px_circle_at_92%_8%,rgba(253,224,71,0.2),transparent_40%),linear-gradient(180deg,rgba(240,249,255,0.7)_0%,rgba(236,253,245,0.45)_55%,rgba(254,249,195,0.35)_100%)]" />
+              <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-cyan-100/50 to-transparent" />
+              <div className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-lime-100/40 to-transparent" />
+            </>
+          )}
         </div>
 
-        <Card className="relative mx-auto w-full max-w-[560px] space-y-4 p-4 sm:p-6" hover>
-          <Card className="border-dm-border/80 bg-dm-muted p-3 sm:p-4">
+        <section className="relative mx-auto w-full max-w-[620px] space-y-4">
+          <Card className="border-dm-border/75 bg-dm-card/95 p-4 backdrop-blur" hover>
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="overflow-hidden rounded-lg border border-dm-accent/35">
+                <div className="overflow-hidden rounded-xl border border-dm-accent/35 bg-dm-muted/70">
                   <Image
                     src={mafiaImage}
                     alt="메인 로비 아트"
-                    width={44}
-                    height={44}
+                    width={46}
+                    height={46}
                     className="h-11 w-11 object-cover"
                     priority
                   />
                 </div>
                 <div>
-                  <p className="text-[11px] uppercase tracking-[0.2em] text-dm-text-secondary">Main Lobby</p>
-                  <p className="text-sm font-semibold text-dm-text-primary">DRAW MAFIA Command Center</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-dm-text-secondary">Lobby</p>
+                  <p className="mt-0.5 text-sm font-semibold text-dm-text-primary">Draw Mafia Matching Center</p>
                 </div>
               </div>
-              <span className="rounded-full border border-dm-primary/30 bg-dm-primary/10 px-3 py-1 text-[11px] font-semibold text-dm-primary animate-pulse">
-                ONLINE
+              <span className="rounded-full border border-emerald-400/35 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold text-emerald-400">
+                실시간 연결
               </span>
             </div>
           </Card>
 
-          <Card className="border-dm-border/80 bg-dm-card p-5 sm:p-6" hover>
-            <div className="mx-auto text-center">
-              <div className="flex items-center justify-center gap-2">
-                <span className="rounded-full border border-dm-secondary/45 bg-dm-secondary/10 px-2 py-0.5 text-xs text-dm-secondary">
-                  MAIN SCREEN
-                </span>
-                <span className="rounded-full border border-dm-accent/45 bg-dm-accent/10 px-2 py-0.5 text-xs text-dm-accent">
-                  READY TO PLAY
-                </span>
+          <Card className="border-dm-border/75 bg-dm-card/95 p-6 sm:p-7" hover>
+            <div className="space-y-4">
+              <div className="inline-flex items-center gap-2 rounded-full border border-dm-primary/25 bg-dm-primary/10 px-3 py-1 text-xs font-semibold text-dm-primary">
+                QUICK START
               </div>
-              <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
-                DRAW MAFIA
-                <span className="block bg-gradient-to-r from-dm-primary to-dm-accent bg-clip-text text-transparent">
-                  MAIN LOBBY
-                </span>
-              </h1>
-              <p className="mt-4 text-sm font-medium text-dm-text-subtext sm:text-base">
-                닉네임을 입력하고 바로 방을 생성하거나, 코드로 입장해 라운드를 시작하세요.
-              </p>
+
+              <div className="space-y-2">
+                <h1 className="text-3xl font-bold tracking-tight sm:text-[2.2rem]">
+                  친구들과 바로 시작하는
+                  <span className="mt-1 block bg-gradient-to-r from-dm-primary via-sky-400 to-dm-accent bg-clip-text text-transparent">
+                    그림 마피아 로비
+                  </span>
+                </h1>
+                <p className="text-sm leading-relaxed text-dm-text-subtext sm:text-[15px]">
+                  닉네임만 입력하면 새 방 생성 또는 코드 입장이 바로 가능합니다.
+                </p>
+              </div>
             </div>
           </Card>
 
-          <Card className="mx-auto w-full space-y-5 border-dm-border/80 bg-dm-card p-4 sm:p-5" hover>
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium text-dm-text-secondary">닉네임</span>
-              <input
-                type="text"
-                value={nickname}
-                onChange={(event) => setNickname(event.target.value)}
-                placeholder="닉네임 입력"
-                className="dm-input"
-                maxLength={20}
-              />
-            </label>
+          <Card className="border-dm-border/75 bg-dm-card/95 p-5 sm:p-6" hover>
+            <div className="space-y-5">
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-dm-text-secondary">닉네임</span>
+                <input
+                  type="text"
+                  value={nickname}
+                  onChange={(event) => setNickname(event.target.value)}
+                  placeholder="닉네임 입력"
+                  className="dm-input"
+                  maxLength={20}
+                />
+              </label>
 
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium text-dm-text-secondary">방 코드</span>
-              <input
-                type="text"
-                value={roomCodeInput}
-                onChange={(event) => setRoomCodeInput(normalizeRoomCode(event.target.value))}
-                placeholder="예: AB12CD"
-                className="dm-input uppercase"
-                maxLength={8}
-              />
-            </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-dm-text-secondary">방 코드</span>
+                <input
+                  type="text"
+                  value={roomCodeInput}
+                  onChange={(event) => setRoomCodeInput(normalizeRoomCode(event.target.value))}
+                  placeholder="예: AB12CD"
+                  className="dm-input uppercase"
+                  maxLength={8}
+                />
+              </label>
 
-            {isLoading ? <LoadingSpinner label="매치메이킹 연결 중..." /> : null}
+              {isLoading ? <LoadingSpinner label="매치메이킹 연결 중..." /> : null}
 
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button type="button" onClick={createRoom} disabled={isLoading} variant="primary" className="w-full sm:flex-1">
-                {isLoading ? "처리 중..." : "방 생성"}
-              </Button>
-              <Button type="button" onClick={joinRoom} disabled={isLoading} variant="ghost" className="w-full sm:flex-1">
-                {isLoading ? "처리 중..." : "방 입장"}
-              </Button>
-            </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Button
+                  type="button"
+                  onClick={createRoom}
+                  disabled={isLoading}
+                  variant="primary"
+                  className="h-12 w-full rounded-2xl text-[15px]"
+                >
+                  {isLoading ? "처리 중..." : "방 생성"}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={joinRoom}
+                  disabled={isLoading}
+                  variant="ghost"
+                  className="h-12 w-full rounded-2xl text-[15px]"
+                >
+                  {isLoading ? "처리 중..." : "방 입장"}
+                </Button>
+              </div>
 
-            <div className="flex justify-center pt-1">
               <Button
                 type="button"
                 variant="secondary"
                 onClick={() => setRuleModalOpen(true)}
-                className="min-w-[132px]"
+                className="h-11 w-full rounded-2xl"
               >
-                룰 설명
+                룰 설명 보기
               </Button>
             </div>
           </Card>
-        </Card>
+        </section>
       </main>
 
       <GameDialog
