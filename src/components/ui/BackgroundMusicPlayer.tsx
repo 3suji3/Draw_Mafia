@@ -41,7 +41,7 @@ export function BackgroundMusicPlayer() {
   useEffect(() => {
     if (!isReady || !hasUserInteracted) return;
 
-    const initAudio = () => {
+    const initAudio = async () => {
       const musicEnabled = window.localStorage.getItem(MUSIC_ENABLED_KEY) !== "false";
       const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
       const theme: "dark" | "light" = stored === "light" ? "light" : "dark";
@@ -49,6 +49,19 @@ export function BackgroundMusicPlayer() {
       if (!audioRef.current) {
         audioRef.current = new Audio();
         audioRef.current.loop = true;
+      }
+
+      // AudioContext resume (자동재생 정책용)
+      try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContext) {
+          const ctx = new AudioContext();
+          if (ctx.state === "suspended") {
+            await ctx.resume();
+          }
+        }
+      } catch (err) {
+        // AudioContext 초기화 실패는 무시
       }
 
       const themeMusicMap: Record<"light" | "dark", string> = {
@@ -67,11 +80,12 @@ export function BackgroundMusicPlayer() {
       }
 
       if (musicEnabled && audioRef.current.paused) {
-        audioRef.current
-          .play()
-          .catch((err) => {
-            console.warn("[배경음악] 재생 실패:", err.message);
-          });
+        try {
+          await audioRef.current.play();
+          console.log("[배경음악] 재생 시작 ✓");
+        } catch (err: any) {
+          console.warn("[배경음악] 재생 실패:", err?.message || err);
+        }
       }
     };
 
