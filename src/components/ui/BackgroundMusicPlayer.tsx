@@ -121,7 +121,13 @@ export function BackgroundMusicPlayer() {
       style={{ display: "none" }}
       title="배경음악"
       onError={(e) => {
-        console.error("[배경음악] 오류:", e);
+        const audio = e.currentTarget as HTMLAudioElement;
+        if (audio?.error) {
+          console.warn(
+            `[배경음악] 재생 오류 (코드: ${audio.error.code}):`,
+            audio.error.message || "알 수 없는 오류"
+          );
+        }
       }}
     />
   );

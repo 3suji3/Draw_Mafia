@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { ConditionalThemeToggle, BackgroundMusicPlayer } from "@/components/ui";
+import { ConditionalThemeToggle, ConditionalMusicToggle, BackgroundMusicPlayer } from "@/components/ui";
 import "./globals.css";
 
 const inter = Inter({
@@ -52,6 +52,7 @@ export default function RootLayout({
     <html lang="ko">
       <body className={inter.className}>
         <ConditionalThemeToggle />
+        <ConditionalMusicToggle />
         <BackgroundMusicPlayer />
         {children}
       </body>
