@@ -10,7 +10,8 @@ export type PromptCategory =
   | "자연"
   | "물건"
   | "생활용품"
-  | "의류/패션";
+  | "의류/패션"
+  | "위인";
 
 export const PROMPT_CATEGORIES: PromptCategory[] = [
   "동물",
@@ -25,6 +26,7 @@ export const PROMPT_CATEGORIES: PromptCategory[] = [
   "물건",
   "생활용품",
   "의류/패션",
+  "위인",
 ];
 
 export type PromptPair = {
