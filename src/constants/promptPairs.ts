@@ -60,16 +60,9 @@ export function getRandomPromptPair(): PromptPair {
     throw new Error("Prompt source data is empty.");
   }
 
+  // 액션과 제시어를 완전히 독립적으로 선택 (필터링 없음)
   const actionPair = ACTION_PAIRS[Math.floor(Math.random() * ACTION_PAIRS.length)];
-  const subjectCandidates = SUBJECT_PAIRS.filter((subjectPair) =>
-    actionPair.allowedCategories.includes(subjectPair.category)
-  );
-
-  if (subjectCandidates.length === 0) {
-    throw new Error("No compatible subject pair for selected action pair.");
-  }
-
-  const subjectPair = subjectCandidates[Math.floor(Math.random() * subjectCandidates.length)];
+  const subjectPair = SUBJECT_PAIRS[Math.floor(Math.random() * SUBJECT_PAIRS.length)];
 
   return {
     citizenAction: actionPair.citizenAction,
