@@ -40,18 +40,16 @@ export function BackgroundMusicPlayer() {
 
   // 배경음악 재생 및 상태 관리
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || !audioRef.current) return;
 
-    const initAudio = async () => {
-      const musicEnabled = window.localStorage.getItem(MUSIC_ENABLED_KEY) !== "false";
+    const audio = audioRef.current;
+    const musicEnabled = window.localStorage.getItem(MUSIC_ENABLED_KEY) !== "false";
 
-      if (!audioRef.current) {
-        audioRef.current = new Audio();
-        // 무한 반복 설정
-        audioRef.current.loop = true;
-      }
+    // 무한 반복 설정 (항상 활성화)
+    audio.loop = true;
 
-      // AudioContext resume (자동재생 정책용)
+    // AudioContext resume (자동재생 정책용)
+    const resumeAudioContext = async () => {
       try {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioContext) {
@@ -63,36 +61,41 @@ export function BackgroundMusicPlayer() {
       } catch (err) {
         // AudioContext 초기화 실패는 무시
       }
+    };
 
-      // URL 인코딩된 파일 경로
-      const themeMusicMap: Record<"light" | "dark", string> = {
-        light: "/Coloring_Outside_the_Lines.mp3",
-        "dark": "/Charcoal_Chromatic_Chaos.mp3",
-      };
+    // URL 인코딩된 파일 경로
+    const themeMusicMap: Record<"light" | "dark", string> = {
+      light: "/Coloring_Outside_the_Lines.mp3",
+      "dark": "/Charcoal_Chromatic_Chaos.mp3",
+    };
 
-      const newSrc = themeMusicMap[currentTheme];
-      const volume = parseFloat(window.localStorage.getItem(MUSIC_VOLUME_KEY) || "0.2");
+    const newSrc = themeMusicMap[currentTheme];
+    const volume = parseFloat(window.localStorage.getItem(MUSIC_VOLUME_KEY) || "0.2");
 
-      audioRef.current.volume = volume;
+    audio.volume = volume;
 
-      // 음악 파일 변경
-      if (audioRef.current.src !== newSrc) {
-        audioRef.current.src = newSrc;
-        audioRef.current.load();
-      }
+    // 음악 파일 변경
+    if (audio.src !== newSrc) {
+      audio.src = newSrc;
+      audio.load();
+    }
 
-      // 게임 페이지 여부에 따른 음소거 상태 설정
-      // 게임 플레이 중: 배경음악 항상 음소거 (효과음만 들리도록)
-      // 로비/대기방: 음악 ON 상태면 음소거 해제
-      const shouldBeMuted = isGamePage || !musicEnabled;
-      audioRef.current.muted = shouldBeMuted;
+    // 무한 반복 설정 재확인 (load 후에도 유지)
+    audio.loop = true;
 
-      // 음악 ON 상태면 항상 재생 (첫 로딩 시 자동 재생 보장)
-      if (musicEnabled) {
+    // 게임 페이지 여부에 따른 음소거 상태 설정
+    const shouldBeMuted = isGamePage || !musicEnabled;
+    audio.muted = shouldBeMuted;
+
+    // 음악 ON 상태면 항상 재생
+    if (musicEnabled) {
+      resumeAudioContext().then(async () => {
         try {
-          // 이미 재생 중이면 무시, 정지 중이면 재생
-          if (audioRef.current.paused) {
-            await audioRef.current.play();
+          if (audio.paused) {
+            const playPromise = audio.play();
+            if (playPromise) {
+              await playPromise;
+            }
           }
           const status = isGamePage ? "(무한 반복 중, 음소거)" : "(배경음악 재생 중)";
           console.log(
@@ -101,15 +104,13 @@ export function BackgroundMusicPlayer() {
         } catch (err: any) {
           console.warn("[배경음악] 자동 재생 실패:", err?.message || err);
         }
-      } else {
-        // 음악이 OFF일 때는 중지
-        if (!audioRef.current.paused) {
-          audioRef.current.pause();
-        }
+      });
+    } else {
+      // 음악이 OFF일 때는 중지
+      if (!audio.paused) {
+        audio.pause();
       }
-    };
-
-    initAudio();
+    }
   }, [isReady, currentTheme, isGamePage]);
 
   if (!isReady) return null;
@@ -117,8 +118,19 @@ export function BackgroundMusicPlayer() {
   return (
     <audio
       ref={audioRef}
+      loop
       style={{ display: "none" }}
       title="배경음악"
+      onEnded={() => {
+        // loop 속성이 있어도 확실하게 처음부터 재생
+        if (audioRef.current) {
+          audioRef.current.currentTime = 0;
+          const musicEnabled = window.localStorage.getItem(MUSIC_ENABLED_KEY) !== "false";
+          if (musicEnabled && !audioRef.current.paused) {
+            audioRef.current.play().catch(() => {});
+          }
+        }
+      }}
       onError={(e) => {
         const audio = e.currentTarget as HTMLAudioElement;
         if (audio?.error) {

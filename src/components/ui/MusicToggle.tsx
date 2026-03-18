@@ -25,11 +25,14 @@ export function MusicToggle() {
     // 음악 즉시 제어
     const audio = document.querySelector("audio");
     if (audio) {
-      if (nextState && audio.paused) {
-        audio.play().catch(() => {
-          console.warn("[배경음악] 재생 실패");
+      if (nextState) {
+        // ON으로 토글할 때: loop 재설정 후 재생
+        audio.loop = true;
+        audio.play().catch((err) => {
+          console.warn("[배경음악] 재생 실패:", err);
         });
-      } else if (!nextState && !audio.paused) {
+      } else {
+        // OFF로 토글할 때: 정지
         audio.pause();
       }
     }
