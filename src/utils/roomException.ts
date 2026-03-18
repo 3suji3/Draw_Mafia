@@ -66,6 +66,12 @@ export async function leaveRoomAndHandleHost(options: LeaveRoomOptions): Promise
   const batch = writeBatch(db);
   const leavingPlayerRef = doc(db, "rooms", roomId, "players", playerId);
   const isHostLeaving = leavingPlayer.isHost || room.hostId === playerId;
+  const remainingPlayers = players.filter((player) => player.id !== playerId);
+
+  const nextHostFromOrder =
+    room.status === "waiting"
+      ? remainingPlayers[0] ?? null
+      : remainingPlayers.find((player) => player.alive) ?? remainingPlayers[0] ?? null;
 
   if (room.status === "waiting") {
     batch.delete(leavingPlayerRef);
@@ -77,12 +83,25 @@ export async function leaveRoomAndHandleHost(options: LeaveRoomOptions): Promise
   }
 
   if (isHostLeaving) {
-    batch.update(roomRef, {
-      status: "ended",
-      endedByHostLeave: true,
-      resultMessage: "방장이 퇴장하여 방이 종료되었습니다.",
-      awaitingMafiaGuess: false,
-    });
+    if (!nextHostFromOrder) {
+      batch.update(roomRef, {
+        status: "ended",
+        endedByHostLeave: true,
+        resultMessage: "모든 플레이어가 퇴장하여 방이 종료되었습니다.",
+        awaitingMafiaGuess: false,
+      });
+    } else {
+      const nextHostRef = doc(db, "rooms", roomId, "players", nextHostFromOrder.id);
+
+      batch.update(nextHostRef, {
+        isHost: true,
+      });
+
+      batch.update(roomRef, {
+        hostId: nextHostFromOrder.id,
+        endedByHostLeave: false,
+      });
+    }
   }
 
   await batch.commit();

@@ -68,6 +68,7 @@ export default function HomePage() {
   const [dialog, setDialog] = useState<DialogState>(INITIAL_DIALOG);
   const [ruleModalOpen, setRuleModalOpen] = useState(false);
   const [testQuerySuffix, setTestQuerySuffix] = useState("");
+  const [inviteRoomCode, setInviteRoomCode] = useState("");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
@@ -83,7 +84,15 @@ export default function HomePage() {
       return;
     }
 
-    const result = resolveTestMode(new URLSearchParams(window.location.search));
+    const searchParams = new URLSearchParams(window.location.search);
+    const result = resolveTestMode(searchParams);
+    const inviteCode = normalizeRoomCode(searchParams.get("room") ?? "");
+
+    if (inviteCode) {
+      setInviteRoomCode(inviteCode);
+      setRoomCodeInput(inviteCode);
+    }
+
     setTestQuerySuffix(result.testQuerySuffix);
   }, []);
 
@@ -211,7 +220,7 @@ export default function HomePage() {
     }
   };
 
-  const joinRoom = async () => {
+  const joinRoom = async (targetRoomCode?: string) => {
     const nicknameError = validateNickname();
 
     if (nicknameError) {
@@ -219,7 +228,7 @@ export default function HomePage() {
       return;
     }
 
-    const roomId = normalizeRoomCode(roomCodeInput);
+    const roomId = normalizeRoomCode(targetRoomCode ?? roomCodeInput);
 
     if (!roomId) {
       openDialog("입력 확인", "방 코드를 입력해주세요.");
@@ -348,7 +357,9 @@ export default function HomePage() {
                   </span>
                 </h1>
                 <p className="text-sm leading-relaxed text-dm-text-subtext sm:text-[15px]">
-                  닉네임만 입력하면 새 방 생성 또는 코드 입장이 바로 가능합니다.
+                  {inviteRoomCode
+                    ? `초대 링크가 감지되었습니다. 닉네임 입력 후 ${inviteRoomCode} 방에 바로 입장할 수 있습니다.`
+                    : "닉네임만 입력하면 새 방 생성 또는 코드 입장이 바로 가능합니다."}
                 </p>
               </div>
             </div>
@@ -378,6 +389,11 @@ export default function HomePage() {
                   className="dm-input uppercase"
                   maxLength={8}
                 />
+                {inviteRoomCode ? (
+                  <p className="mt-2 text-xs font-medium text-dm-primary">
+                    초대 링크 방 코드 자동 입력됨: {inviteRoomCode}
+                  </p>
+                ) : null}
               </label>
 
               {isLoading ? <LoadingSpinner label="매치메이킹 연결 중..." /> : null}
@@ -394,12 +410,12 @@ export default function HomePage() {
                 </Button>
                 <Button
                   type="button"
-                  onClick={joinRoom}
+                  onClick={() => void joinRoom(inviteRoomCode || undefined)}
                   disabled={isLoading}
                   variant="ghost"
                   className="h-12 w-full rounded-2xl text-[15px]"
                 >
-                  {isLoading ? "처리 중..." : "방 입장"}
+                  {isLoading ? "처리 중..." : inviteRoomCode ? "초대 링크로 입장" : "방 입장"}
                 </Button>
               </div>
 

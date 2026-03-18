@@ -37,8 +37,8 @@ export const metadata: Metadata = {
     images: ["/background_logo.png"],
   },
   icons: {
-    icon: "/mafia-tab.png",
-    shortcut: "/mafia-tab.png",
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
     apple: "/mafia-tab.png",
   },
 };

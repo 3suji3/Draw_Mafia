@@ -289,7 +289,14 @@ export default function RoomPage() {
       return;
     }
 
-    if (resolvedRoomId !== joinedRoomId || !storedNickname || recoveryAttemptedRef.current) {
+    if (recoveryAttemptedRef.current) {
+      return;
+    }
+
+    if (!storedNickname) {
+      recoveryAttemptedRef.current = true;
+      openDialog("입장 정보 필요", "닉네임 입력 후 입장할 수 있어 홈으로 이동합니다.");
+      router.push(`/?room=${resolvedRoomId}${testQuerySuffix}`);
       return;
     }
 
@@ -322,13 +329,14 @@ export default function RoomPage() {
       });
   }, [
     currentPlayer,
-    joinedRoomId,
     playerId,
     players,
     recoveringPlayer,
     resolvedRoomId,
+    router,
     room,
     storedNickname,
+    testQuerySuffix,
   ]);
 
   const handleDrawTimeChange = async (nextDrawTime: number) => {
