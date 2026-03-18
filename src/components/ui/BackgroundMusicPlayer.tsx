@@ -9,7 +9,6 @@ const MUSIC_ENABLED_KEY = "draw_mafia_music_enabled";
 export function BackgroundMusicPlayer() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isReady, setIsReady] = useState(false);
-  const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
@@ -37,30 +36,8 @@ export function BackgroundMusicPlayer() {
     return () => observer.disconnect();
   }, []);
 
-  // 사용자 상호작용 감지 (자동재생 정책 우회)
   useEffect(() => {
-    if (hasUserInteracted) return;
-
-    const handleInteraction = () => {
-      setHasUserInteracted(true);
-      document.removeEventListener("click", handleInteraction);
-      document.removeEventListener("keydown", handleInteraction);
-      document.removeEventListener("touchstart", handleInteraction);
-    };
-
-    document.addEventListener("click", handleInteraction);
-    document.addEventListener("keydown", handleInteraction);
-    document.addEventListener("touchstart", handleInteraction);
-
-    return () => {
-      document.removeEventListener("click", handleInteraction);
-      document.removeEventListener("keydown", handleInteraction);
-      document.removeEventListener("touchstart", handleInteraction);
-    };
-  }, [hasUserInteracted]);
-
-  useEffect(() => {
-    if (!isReady || !hasUserInteracted) return;
+    if (!isReady) return;
 
     const initAudio = async () => {
       const musicEnabled = window.localStorage.getItem(MUSIC_ENABLED_KEY) !== "false";
@@ -68,6 +45,8 @@ export function BackgroundMusicPlayer() {
       if (!audioRef.current) {
         audioRef.current = new Audio();
         audioRef.current.loop = true;
+        // 음소거 상태에서 시작 (자동재생 정책 우회)
+        audioRef.current.muted = true;
       }
 
       // AudioContext resume (자동재생 정책용)
@@ -97,21 +76,24 @@ export function BackgroundMusicPlayer() {
       // 음악 파일 변경 또는 첫 재생
       if (audioRef.current.src !== newSrc) {
         audioRef.current.src = newSrc;
-        audioRef.current.load(); // 새 파일 로드
+        audioRef.current.load();
       }
 
-      if (musicEnabled && audioRef.current.paused) {
-        try {
-          await audioRef.current.play();
-          console.log(`[배경음악] ${currentTheme === "light" ? "라이트" : "다크"}모드 음악 재생 ✓`);
-        } catch (err: any) {
-          console.warn("[배경음악] 재생 실패:", err?.message || err);
+      try {
+        // 음소거 상태에서 재생하고 바로 음소거 해제
+        await audioRef.current.play();
+        if (musicEnabled) {
+          audioRef.current.muted = false;
         }
+        console.log(`[배경음악] ${currentTheme === "light" ? "라이트" : "다크"}모드 음악 자동 재생 ✓`);
+      } catch (err: any) {
+        console.warn("[배경음악] 자동 재생 실패:", err?.message || err);
+        // 실패해도 음소거 상태로 계속 유지
       }
     };
 
     initAudio();
-  }, [isReady, hasUserInteracted, currentTheme]);
+  }, [isReady, currentTheme]);
 
   if (!isReady) return null;
 
