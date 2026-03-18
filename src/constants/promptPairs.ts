@@ -60,9 +60,20 @@ export function getRandomPromptPair(): PromptPair {
     throw new Error("Prompt source data is empty.");
   }
 
-  // 액션과 제시어를 완전히 독립적으로 선택 (필터링 없음)
+  // 액션 선택
   const actionPair = ACTION_PAIRS[Math.floor(Math.random() * ACTION_PAIRS.length)];
-  const subjectPair = SUBJECT_PAIRS[Math.floor(Math.random() * SUBJECT_PAIRS.length)];
+  
+  // 해당 액션의 허용 카테고리에 맞는 제시어만 필터링
+  const subjectCandidates = SUBJECT_PAIRS.filter((subjectPair) =>
+    actionPair.allowedCategories.includes(subjectPair.category)
+  );
+
+  if (subjectCandidates.length === 0) {
+    throw new Error("No compatible subject pair for selected action pair.");
+  }
+
+  // 필터링된 제시어 중에서 선택 (시민과 마피아는 같은 제시어 쌍 사용)
+  const subjectPair = subjectCandidates[Math.floor(Math.random() * subjectCandidates.length)];
 
   return {
     citizenAction: actionPair.citizenAction,

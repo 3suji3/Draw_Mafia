@@ -64,16 +64,19 @@ Canvas는 HTML Canvas 직접 구현이다.
 
 ```text
 ACTION_PAIRS (51개)
+	+ allowedCategories (카테고리 제한)
 	+ SUBJECT_PAIRS (230개)
 	-> getRandomPromptPair()
-	   ├─ actionPair (독립 선택)
-	   └─ subjectPair (독립 선택)
+	   1. actionPair 선택
+	   2. 해당 actionPair.allowedCategories에 맞는 subjectPair만 필터링
+	   3. 필터링된 subjectPair 중 1개 선택
 ```
 
-**완전 독립 선택 방식:**
-- 액션(`citizenAction`, `mafiaAction`)과 피사체(`citizenSubject`, `mafiaSubject`)는 필터링 없이 독립적으로 선택됨
-- 같은 피사체가 다양한 행동으로 표현될 수 있음 (예: "웃는 세종대왕", "연설하는 세종대왕")
-- 최대 조합: 51 × 230 = 11,730+ 제시어
+**필터링 기반 선택:**
+- 액션과 피사체 카테고리의 호환성 검증
+- 문법적으로 자연스러운 조합만 생성 (예: "공부하는 수영장" 불가)
+- 시민과 마피아는 같은 피사체 카테고리 내에서 선택되어 유사한 제시어 보장
+- 실제 조합: 51 × (평균 카테고리당 제시어 수) = 약 7,360+ 제시어
 
 이 구조는 카테고리별 데이터만 추가해도 제시어 풀이 빠르게 늘어나는 장점이 있다. 문서와 코드 모두 `시민/마피아 모두 완성형 제시어 지급` 기준으로 통일한다.
 
