@@ -85,8 +85,8 @@ export function BackgroundMusicPlayer() {
 
       // URL 인코딩된 파일 경로
       const themeMusicMap: Record<"light" | "dark", string> = {
-        light: "/Shtriker%20Big%20Band%20-%20Lemonade.mp3",
-        "dark": "/O%20P%20Baron%20-%20Honey%20You%27re%20My%20Sweetie%20feat%20The%20Hazelnuts.mp3",
+        light: "/Coloring_Outside_the_Lines.mp3",
+        "dark": "/Charcoal_Chromatic_Chaos.mp3",
       };
 
       const newSrc = themeMusicMap[currentTheme];
