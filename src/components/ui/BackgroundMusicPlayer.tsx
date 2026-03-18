@@ -4,59 +4,87 @@ import { useEffect, useRef, useState } from "react";
 
 const THEME_STORAGE_KEY = "draw_mafia_theme";
 const MUSIC_VOLUME_KEY = "draw_mafia_music_volume";
+const MUSIC_ENABLED_KEY = "draw_mafia_music_enabled";
 
 export function BackgroundMusicPlayer() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
 
   useEffect(() => {
-    // 클라이언트 사이드만 실행
     setIsReady(true);
   }, []);
 
+  // 사용자 상호작용 감지 (자동재생 정책 우회)
   useEffect(() => {
-    if (!isReady) return;
+    if (hasUserInteracted) return;
 
-    const updateMusic = () => {
+    const handleInteraction = () => {
+      setHasUserInteracted(true);
+      // 한 번 발생하면 리스너 제거
+      document.removeEventListener("click", handleInteraction);
+      document.removeEventListener("keydown", handleInteraction);
+      document.removeEventListener("touchstart", handleInteraction);
+    };
+
+    document.addEventListener("click", handleInteraction);
+    document.addEventListener("keydown", handleInteraction);
+    document.addEventListener("touchstart", handleInteraction);
+
+    return () => {
+      document.removeEventListener("click", handleInteraction);
+      document.removeEventListener("keydown", handleInteraction);
+      document.removeEventListener("touchstart", handleInteraction);
+    };
+  }, [hasUserInteracted]);
+
+  useEffect(() => {
+    if (!isReady || !hasUserInteracted) return;
+
+    const initAudio = () => {
+      const musicEnabled = window.localStorage.getItem(MUSIC_ENABLED_KEY) !== "false";
       const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
       const theme: "dark" | "light" = stored === "light" ? "light" : "dark";
 
-      // 라이트 모드: S로 시작, 다크 모드: O로 시작
-      const musicPrefix = theme === "light" ? "S" : "O";
-
-      // public 폴더에서 해당 prefix로 시작하는 파일 찾기
       if (!audioRef.current) {
         audioRef.current = new Audio();
         audioRef.current.loop = true;
-        audioRef.current.volume = parseFloat(
-          window.localStorage.getItem(MUSIC_VOLUME_KEY) || "0.3"
-        );
       }
 
-      // 현재 재생중인 음악
-      const currentSrc = audioRef.current.src;
       const themeMusicMap: Record<"light" | "dark", string> = {
         light: "/Shtriker Big Band - Lemonade.mp3",
         "dark": "/O P Baron - Honey You're My Sweetie feat The Hazelnuts.mp3",
       };
-      const newSrc = themeMusicMap[theme];
 
-      // 음악 파일이 변경되었으면 바꾸기
-      if (!currentSrc.includes(newSrc)) {
+      const newSrc = themeMusicMap[theme];
+      const volume = parseFloat(window.localStorage.getItem(MUSIC_VOLUME_KEY) || "0.2");
+
+      audioRef.current.volume = volume;
+
+      // 음악 파일 변경 또는 첫 재생
+      if (audioRef.current.src !== newSrc) {
         audioRef.current.src = newSrc;
-        audioRef.current.play().catch(() => {
-          // 자동 재생 정책으로 인해 실패할 수 있음
-        });
+      }
+
+      if (musicEnabled && audioRef.current.paused) {
+        audioRef.current
+          .play()
+          .catch((err) => {
+            console.warn("[배경음악] 재생 실패:", err.message);
+          });
       }
     };
 
-    // 초기 설정
-    updateMusic();
+    initAudio();
 
-    // 테마 변경 감지 (storage 이벤트)
-    window.addEventListener("storage", updateMusic);
-    return () => window.removeEventListener("storage", updateMusic);
-  }, [isReady]);
+    // 테마 변경 감시
+    const handleStorageChange = () => {
+      initAudio();
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [isReady, hasUserInteracted]);
 
   if (!isReady) return null;
 
@@ -65,6 +93,9 @@ export function BackgroundMusicPlayer() {
       ref={audioRef}
       style={{ display: "none" }}
       title="배경음악"
+      onError={(e) => {
+        console.error("[배경음악] 오류:", e);
+      }}
     />
   );
 }
