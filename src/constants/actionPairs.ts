@@ -1,7 +1,7 @@
 import type { ActionPair, PromptCategory } from "@/types/prompt";
 
-const ACTOR_CATEGORIES: PromptCategory[] = ["동물", "사람", "직업"];
-const HUMAN_CATEGORIES: PromptCategory[] = ["사람", "직업"];
+const ACTOR_CATEGORIES: PromptCategory[] = ["동물", "사람", "직업", "위인"];
+const HUMAN_CATEGORIES: PromptCategory[] = ["사람", "직업", "위인"];
 const OBJECT_CATEGORIES: PromptCategory[] = ["물건", "생활용품", "학용품", "의류/패션"];
 const OBJECT_EXTENDED_CATEGORIES: PromptCategory[] = [
   "물건",
@@ -71,4 +71,10 @@ export const ACTION_PAIRS: ActionPair[] = [
   action("정비하는", "고치는", ["탈것", "물건", "생활용품"]),
   action("꾸미는", "장식하는", ["의류/패션", "물건", "장소"]),
   action("자르는", "써는", ["음식", "생활용품", "학용품"]),
+  
+  // 위인과 잘 맞는 새로운 액션들
+  action("선언하는", "연설하는", HUMAN_CATEGORIES),
+  action("통치하는", "지배하는", HUMAN_CATEGORIES),
+  action("발견하는", "발명하는", HUMAN_CATEGORIES),
+  action("역사를 쓰는", "업적을 남기는", HUMAN_CATEGORIES),
 ];
