@@ -386,7 +386,7 @@ export default function GamePage() {
     room && room.status === "playing" && room.turnOrder[room.turnIndex] === playerId
   );
   const isAlive = Boolean(currentPlayer?.alive);
-  const canDrawNow = Boolean(room?.status === "playing" && isAlive);
+  const canDrawNow = Boolean(room?.status === "playing" && isAlive && isMyTurn);
 
   const renderCanvasStrokes = useMemo(() => {
     if (!canDrawNow) {
@@ -1685,11 +1685,8 @@ export default function GamePage() {
                           size={size}
                           onStrokeComplete={handleStrokeComplete}
                         />
-                        <div className="pointer-events-none absolute left-2 top-2 rounded-md bg-dm-bg/75 px-2 py-1 text-[10px] text-dm-text-primary">
-                          {prevGalleryDrawing?.playerName ?? ""}
-                        </div>
-                        <div className="pointer-events-none absolute right-2 top-2 rounded-md bg-dm-bg/75 px-2 py-1 text-[10px] text-dm-text-primary">
-                          {nextGalleryDrawing?.playerName ?? ""}
+                        <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-md bg-dm-bg/75 px-2 py-1 text-[10px] text-dm-text-primary">
+                          {activeGalleryDrawing?.playerName ?? ""}
                         </div>
                         <Button
                           type="button"
@@ -1870,7 +1867,7 @@ export default function GamePage() {
                   <p className="text-[11px] text-dm-text-secondary">
                     마피아 제시어: <span className="font-semibold text-dm-text-primary">{mafiaPromptText || "-"}</span>
                   </p>
-                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
                     <Button
                       type="button"
                       onClick={handleRestartGame}
@@ -1878,6 +1875,14 @@ export default function GamePage() {
                       className="w-full px-3 py-2 text-sm"
                     >
                       {restartingGame ? "재시작 중" : "같은 방 다시 시작"}
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => router.push(`/room/${resolvedRoomId}`)}
+                      variant="secondary"
+                      className="w-full px-3 py-2 text-sm"
+                    >
+                      대기방
                     </Button>
                     <Button
                       type="button"
