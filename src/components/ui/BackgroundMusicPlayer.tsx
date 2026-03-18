@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 
-const THEME_STORAGE_KEY = "draw_mafia_theme";
 const MUSIC_VOLUME_KEY = "draw_mafia_music_volume";
 const MUSIC_ENABLED_KEY = "draw_mafia_music_enabled";
 
@@ -10,6 +10,8 @@ export function BackgroundMusicPlayer() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<"dark" | "light">("dark");
+  const pathname = usePathname();
+  const isGamePage = pathname?.startsWith("/game/");
 
   useEffect(() => {
     setIsReady(true);
@@ -36,6 +38,7 @@ export function BackgroundMusicPlayer() {
     return () => observer.disconnect();
   }, []);
 
+  // 배경음악 재생 및 상태 관리
   useEffect(() => {
     if (!isReady) return;
 
@@ -45,8 +48,6 @@ export function BackgroundMusicPlayer() {
       if (!audioRef.current) {
         audioRef.current = new Audio();
         audioRef.current.loop = true;
-        // 음소거 상태에서 시작 (자동재생 정책 우회)
-        audioRef.current.muted = true;
       }
 
       // AudioContext resume (자동재생 정책용)
@@ -73,27 +74,34 @@ export function BackgroundMusicPlayer() {
 
       audioRef.current.volume = volume;
 
-      // 음악 파일 변경 또는 첫 재생
+      // 음악 파일 변경
       if (audioRef.current.src !== newSrc) {
         audioRef.current.src = newSrc;
         audioRef.current.load();
       }
 
-      try {
-        // 음소거 상태에서 재생하고 바로 음소거 해제
-        await audioRef.current.play();
-        if (musicEnabled) {
-          audioRef.current.muted = false;
+      // 게임 페이지 여부에 따른 음소거 상태 설정
+      // 게임 플레이 중: 배경음악 항상 음소거 (효과음만 들리도록)
+      // 로비/대기방: 음악 ON 상태면 음소거 해제
+      const shouldBeMuted = isGamePage || !musicEnabled;
+      audioRef.current.muted = shouldBeMuted;
+
+      // 음악 ON 상태이고 paused면 재생
+      if (musicEnabled && audioRef.current.paused) {
+        try {
+          await audioRef.current.play();
+          const status = isGamePage ? "(무한 반복 중, 음소거)" : "(배경음악 재생)";
+          console.log(
+            `[배경음악] ${currentTheme === "light" ? "라이트" : "다크"}모드 음악 ${status} ✓`
+          );
+        } catch (err: any) {
+          console.warn("[배경음악] 자동 재생 실패:", err?.message || err);
         }
-        console.log(`[배경음악] ${currentTheme === "light" ? "라이트" : "다크"}모드 음악 자동 재생 ✓`);
-      } catch (err: any) {
-        console.warn("[배경음악] 자동 재생 실패:", err?.message || err);
-        // 실패해도 음소거 상태로 계속 유지
       }
     };
 
     initAudio();
-  }, [isReady, currentTheme]);
+  }, [isReady, currentTheme, isGamePage]);
 
   if (!isReady) return null;
 

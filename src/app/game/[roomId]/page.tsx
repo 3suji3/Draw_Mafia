@@ -1545,19 +1545,7 @@ export default function GamePage() {
               <Button
                 type="button"
                 onClick={() => {
-                  const nextState = !soundEnabled;
-                  setSoundEnabled(nextState);
-                  
-                  // 배경음악도 함께 제어
-                  window.localStorage.setItem("draw_mafia_music_enabled", String(nextState));
-                  const audio = document.querySelector("audio");
-                  if (audio) {
-                    if (nextState && audio.paused) {
-                      audio.play().catch(() => {});
-                    } else if (!nextState && !audio.paused) {
-                      audio.pause();
-                    }
-                  }
+                  setSoundEnabled((prev) => !prev);
                 }}
                 variant="ghost"
                 className="min-w-[94px] px-2 py-1 text-[10px]"
