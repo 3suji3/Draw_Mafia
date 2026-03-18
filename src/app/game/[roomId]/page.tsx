@@ -153,6 +153,7 @@ export default function GamePage() {
   const autoFinalizedMafiaGuessTimeoutKeyRef = useRef<string>("");
   const previousEliminatedRef = useRef<string | null>(null);
   const previousWinnerDialogKeyRef = useRef<string>("");
+  const previousHostIdRef = useRef<string>("");
   const hostLeaveHandledRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -1292,6 +1293,27 @@ export default function GamePage() {
       window.clearTimeout(timeoutId);
     };
   }, [currentPlayer, resolvedRoomId, room, router, testQuerySuffix]);
+
+  useEffect(() => {
+    if (!room?.hostId) {
+      return;
+    }
+
+    if (!previousHostIdRef.current) {
+      previousHostIdRef.current = room.hostId;
+      return;
+    }
+
+    if (previousHostIdRef.current !== room.hostId) {
+      const nextHost = players.find((player) => player.id === room.hostId);
+
+      if (nextHost) {
+        pushToast(`새 방장: ${nextHost.nickname}`);
+      }
+    }
+
+    previousHostIdRef.current = room.hostId;
+  }, [players, room?.hostId]);
 
   useEffect(() => {
     if (!room || room.status !== "ended" || !room.endedByHostLeave || hostLeaveHandledRef.current) {

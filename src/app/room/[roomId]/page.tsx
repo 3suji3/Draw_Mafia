@@ -78,6 +78,7 @@ export default function RoomPage() {
   const recoveryAttemptedRef = useRef(false);
   const hostLeaveHandledRef = useRef(false);
   const prevPlayerIdsRef = useRef<string[]>([]);
+  const prevHostIdRef = useRef<string>("");
   const creatingBotsRef = useRef(false);
 
   const openDialog = (title: string, description: string) => {
@@ -222,6 +223,27 @@ export default function RoomPage() {
 
     prevPlayerIdsRef.current = currentIds;
   }, [players]);
+
+  useEffect(() => {
+    if (!room?.hostId) {
+      return;
+    }
+
+    if (!prevHostIdRef.current) {
+      prevHostIdRef.current = room.hostId;
+      return;
+    }
+
+    if (prevHostIdRef.current !== room.hostId) {
+      const nextHost = players.find((player) => player.id === room.hostId);
+
+      if (nextHost) {
+        pushToast(`새 방장: ${nextHost.nickname}`);
+      }
+    }
+
+    prevHostIdRef.current = room.hostId;
+  }, [players, room?.hostId]);
 
   useEffect(() => {
     if (!room || !resolvedRoomId) {
