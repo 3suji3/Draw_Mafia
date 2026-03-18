@@ -63,16 +63,32 @@ Canvas는 HTML Canvas 직접 구현이다.
 제시어는 아래 계층으로 관리한다.
 
 ```text
-ACTION_PAIRS
-	+ SUBJECT_PAIRS
-	+ allowedCategories
-	-> PROMPT_PAIRS
+ACTION_PAIRS (51개)
+	+ SUBJECT_PAIRS (230개)
 	-> getRandomPromptPair()
+	   ├─ actionPair (독립 선택)
+	   └─ subjectPair (독립 선택)
 ```
 
-이 구조는 카테고리별 데이터만 추가해도 제시어 풀이 빠르게 늘어나는 장점이 있다. 문서와 코드 모두 `부분 힌트 규칙 없음`, `시민/마피아 모두 완성형 제시어 지급` 기준으로 통일한다.
+**완전 독립 선택 방식:**
+- 액션(`citizenAction`, `mafiaAction`)과 피사체(`citizenSubject`, `mafiaSubject`)는 필터링 없이 독립적으로 선택됨
+- 같은 피사체가 다양한 행동으로 표현될 수 있음 (예: "웃는 세종대왕", "연설하는 세종대왕")
+- 최대 조합: 51 × 230 = 11,730+ 제시어
 
-## 8. 동기화 전략
+이 구조는 카테고리별 데이터만 추가해도 제시어 풀이 빠르게 늘어나는 장점이 있다. 문서와 코드 모두 `시민/마피아 모두 완성형 제시어 지급` 기준으로 통일한다.
+
+## 8. 배경음악 시스템
+
+배경음악은 `BackgroundMusicPlayer` 컴포넌트로 관리된다.
+
+- 테마 변경 시 자동으로 음악 파일 전환
+- 라이트 모드: `S*.mp3` 패턴 (예: Shtriker Big Band - Lemonade.mp3)
+- 다크 모드: `O*.mp3` 패턴 (예: O P Baron - Honey You're My Sweetie.mp3)
+- 저장 위치: `public/` 폴더
+- 제어: localStorage의 `draw_mafia_music_volume` 키로 볼륨 관리
+- HTML5 Audio API 기반, 루프 재생 지원
+
+## 9. 동기화 전략
 
 - room document: 상태, 턴, 라운드, 승패
 - players subcollection: 참가자와 생존 상태
@@ -81,13 +97,13 @@ ACTION_PAIRS
 
 네트워크 지연이나 중복 실행 방지는 클라이언트에서 토스트, 보호 ref, 재시도 로직으로 보완한다.
 
-## 9. 결과 표시 구조
+## 10. 결과 표시 구조
 
 - `playing`: 현재 턴 캔버스 중심 표시
 - `voting`, `result`: 플레이어별 그림을 캐러셀처럼 넘겨 보며 비교
 - `ended`: 승리 팀, 승리자, 시민/마피아 제시어 공개
 
-## 11. 채팅 상태 제어
+## 12. 채팅 상태 제어
 
 채팅은 `ChatPanel` 컴포넌트가 담당하며, `isEnabled` prop으로 상태를 제어한다.
 
@@ -98,7 +114,7 @@ ACTION_PAIRS
 
 메시지는 `rooms/{roomId}/messages` subcollection에 실시간 저장된다.
 
-## 10. 문서 동기화 원칙
+## 11. 문서 동기화 원칙
 
 아래 문서는 항상 같은 규칙을 공유해야 한다.
 

@@ -31,24 +31,28 @@
 
 예시:
 
-- 시민: 먹는 고양이
-- 마피아: 마시는 강아지
+- 시민: 연설하는 세종대왕
+- 마피아: 웃는 세종대왕
 
-### 4-2. 지급 규칙
+### 4-2. 완전 독립 선택 방식
 
-게임 시작 시 `PromptPair` 1개를 선택한다.
+게임 시작 시 `actionPair`와 `subjectPair`를 **독립적으로** 선택한다.
 
-- 시민: `citizenAction + citizenSubject`
-- 마피아: `mafiaAction + mafiaSubject`
+- 시민: `citizenAction + citizenSubject` (필터링 제거)
+- 마피아: `mafiaAction + mafiaSubject` (필터링 제거)
+
+같은 피사체가 다양한 행동으로 표현될 수 있으므로, 예측 불가능한 다양한 조합이 가능하다.
 
 마피아에게 시민 제시어 일부만 따로 공개하는 규칙은 사용하지 않는다.
 
 ### 4-3. 데이터 설계 원칙
 
-- `actionPairs`와 `subjectPairs`를 분리한다.
-- `allowedCategories`로 자연스러운 조합만 생성한다.
+- `actionPairs` (51개): 시민/마피아 액션 쌍
+- `subjectPairs` (230개): 13개 카테고리 × ~18개 피사체 쌍
+- 더 이상 `allowedCategories` 필터링을 사용하지 않음
 - 카테고리별 데이터 추가만으로 제시어 수를 크게 확장할 수 있어야 한다.
 - 단어는 그림으로 표현 가능하고, 초등학생도 이해하기 쉬운 한국어를 우선한다.
+- **최대 조합: 11,730+** (51 × 230)
 
 ## 5. 게임 상태 흐름
 
