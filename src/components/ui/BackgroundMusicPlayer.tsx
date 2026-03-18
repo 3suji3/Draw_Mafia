@@ -87,24 +87,17 @@ export function BackgroundMusicPlayer() {
     const shouldBeMuted = isGamePage || !musicEnabled;
     audio.muted = shouldBeMuted;
 
-    // 음악 ON 상태면 항상 재생
+    // 음악 ON 상태면 재생
     if (musicEnabled) {
-      resumeAudioContext().then(async () => {
-        try {
-          if (audio.paused) {
-            const playPromise = audio.play();
-            if (playPromise) {
-              await playPromise;
-            }
-          }
-          const status = isGamePage ? "(무한 반복 중, 음소거)" : "(배경음악 재생 중)";
-          console.log(
-            `[배경음악] ${currentTheme === "light" ? "라이트" : "다크"}모드 음악 ${status} ✓`
-          );
-        } catch (err: any) {
-          console.warn("[배경음악] 자동 재생 실패:", err?.message || err);
-        }
-      });
+      if (audio.paused) {
+        audio.play().catch((err: any) => {
+          console.warn("[배경음악] 재생 실패:", err?.message || err);
+        });
+      }
+      const status = isGamePage ? "(무한 반복 중, 음소거)" : "(배경음악 재생 중)";
+      console.log(
+        `[배경음악] ${currentTheme === "light" ? "라이트" : "다크"}모드 음악 ${status} ✓`
+      );
     } else {
       // 음악이 OFF일 때는 중지
       if (!audio.paused) {

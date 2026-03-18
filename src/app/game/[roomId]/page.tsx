@@ -1867,15 +1867,7 @@ export default function GamePage() {
                   <p className="text-[11px] text-dm-text-secondary">
                     마피아 제시어: <span className="font-semibold text-dm-text-primary">{mafiaPromptText || "-"}</span>
                   </p>
-                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                    <Button
-                      type="button"
-                      onClick={handleRestartGame}
-                      disabled={!isHost || restartingGame}
-                      className="w-full px-3 py-2 text-sm"
-                    >
-                      {restartingGame ? "재시작 중" : "같은 방 다시 시작"}
-                    </Button>
+                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <Button
                       type="button"
                       onClick={() => router.push(`/room/${resolvedRoomId}`)}

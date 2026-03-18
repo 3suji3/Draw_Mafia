@@ -6,13 +6,13 @@ import { Button } from "./Button";
 const MUSIC_ENABLED_KEY = "draw_mafia_music_enabled";
 
 export function MusicToggle() {
-  const [musicEnabled, setMusicEnabled] = useState(true);
+  const [musicEnabled, setMusicEnabled] = useState(false);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(MUSIC_ENABLED_KEY);
-    if (saved === "false") {
-      setMusicEnabled(false);
+    if (saved === "true") {
+      setMusicEnabled(true);
     }
     setIsReady(true);
   }, []);
