@@ -10,9 +10,31 @@ export function BackgroundMusicPlayer() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
     setIsReady(true);
+  }, []);
+
+  // 테마 변경 감지 (MutationObserver로 html.light class 변경 감시)
+  useEffect(() => {
+    const checkTheme = () => {
+      const theme = document.documentElement.classList.contains("light") ? "light" : "dark";
+      setCurrentTheme(theme);
+    };
+
+    checkTheme();
+
+    const observer = new MutationObserver(() => {
+      checkTheme();
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
   }, []);
 
   // 사용자 상호작용 감지 (자동재생 정책 우회)
@@ -21,7 +43,6 @@ export function BackgroundMusicPlayer() {
 
     const handleInteraction = () => {
       setHasUserInteracted(true);
-      // 한 번 발생하면 리스너 제거
       document.removeEventListener("click", handleInteraction);
       document.removeEventListener("keydown", handleInteraction);
       document.removeEventListener("touchstart", handleInteraction);
@@ -43,8 +64,6 @@ export function BackgroundMusicPlayer() {
 
     const initAudio = async () => {
       const musicEnabled = window.localStorage.getItem(MUSIC_ENABLED_KEY) !== "false";
-      const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-      const theme: "dark" | "light" = stored === "light" ? "light" : "dark";
 
       if (!audioRef.current) {
         audioRef.current = new Audio();
@@ -64,12 +83,13 @@ export function BackgroundMusicPlayer() {
         // AudioContext 초기화 실패는 무시
       }
 
+      // URL 인코딩된 파일 경로
       const themeMusicMap: Record<"light" | "dark", string> = {
-        light: "/Shtriker Big Band - Lemonade.mp3",
-        "dark": "/O P Baron - Honey You're My Sweetie feat The Hazelnuts.mp3",
+        light: "/Shtriker%20Big%20Band%20-%20Lemonade.mp3",
+        "dark": "/O%20P%20Baron%20-%20Honey%20You%27re%20My%20Sweetie%20feat%20The%20Hazelnuts.mp3",
       };
 
-      const newSrc = themeMusicMap[theme];
+      const newSrc = themeMusicMap[currentTheme];
       const volume = parseFloat(window.localStorage.getItem(MUSIC_VOLUME_KEY) || "0.2");
 
       audioRef.current.volume = volume;
@@ -77,12 +97,13 @@ export function BackgroundMusicPlayer() {
       // 음악 파일 변경 또는 첫 재생
       if (audioRef.current.src !== newSrc) {
         audioRef.current.src = newSrc;
+        audioRef.current.load(); // 새 파일 로드
       }
 
       if (musicEnabled && audioRef.current.paused) {
         try {
           await audioRef.current.play();
-          console.log("[배경음악] 재생 시작 ✓");
+          console.log(`[배경음악] ${currentTheme === "light" ? "라이트" : "다크"}모드 음악 재생 ✓`);
         } catch (err: any) {
           console.warn("[배경음악] 재생 실패:", err?.message || err);
         }
@@ -90,15 +111,7 @@ export function BackgroundMusicPlayer() {
     };
 
     initAudio();
-
-    // 테마 변경 감시
-    const handleStorageChange = () => {
-      initAudio();
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, [isReady, hasUserInteracted]);
+  }, [isReady, hasUserInteracted, currentTheme]);
 
   if (!isReady) return null;
 
