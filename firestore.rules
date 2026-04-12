@@ -106,26 +106,31 @@ service cloud.firestore {
     }
 
     match /rooms/{roomId} {
-      allow read, create, update: if isRoomDocument(request.resource.data);
+      allow get, list: if true;
+      allow create, update: if isRoomDocument(request.resource.data);
       allow delete: if true;
 
       match /players/{playerId} {
-        allow read, create, update: if isPlayerDocument(request.resource.data);
+        allow get, list: if true;
+        allow create, update: if isPlayerDocument(request.resource.data);
         allow delete: if true;
       }
 
       match /drawingsByPlayer/{drawingId} {
-        allow read, create, update: if isDrawingDocument(request.resource.data);
+        allow get, list: if true;
+        allow create, update: if isDrawingDocument(request.resource.data);
         allow delete: if true;
       }
 
       match /votes/{voteId} {
-        allow read, create, update: if isVoteDocument(request.resource.data);
+        allow get, list: if true;
+        allow create, update: if isVoteDocument(request.resource.data);
         allow delete: if true;
       }
 
       match /messages/{messageId} {
-        allow read, create, update: if isChatMessageDocument(request.resource.data);
+        allow get, list: if true;
+        allow create, update: if isChatMessageDocument(request.resource.data);
         allow delete: if true;
       }
     }
