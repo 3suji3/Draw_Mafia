@@ -1,0 +1,133 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isString(value) {
+      return value is string;
+    }
+
+    function isNumber(value) {
+      return value is int || value is float;
+    }
+
+    function isBool(value) {
+      return value is bool;
+    }
+
+    function isTimestamp(value) {
+      return value is timestamp;
+    }
+
+    function isRoomStatus(value) {
+      return value in ['waiting', 'playing', 'voting', 'result', 'ended'];
+    }
+
+    function isPlayerRole(value) {
+      return value in ['citizen', 'mafia'];
+    }
+
+    function isRoomDocument(data) {
+      return data.keys().hasAll([
+        'id',
+        'hostId',
+        'status',
+        'maxPlayers',
+        'drawTime',
+        'voteTime',
+        'round',
+        'turnIndex',
+        'turnOrder',
+        'prompt',
+        'mafiaId',
+        'endedByHostLeave'
+      ])
+      && isString(data.id)
+      && isString(data.hostId)
+      && isRoomStatus(data.status)
+      && isNumber(data.maxPlayers)
+      && isNumber(data.drawTime)
+      && isNumber(data.voteTime)
+      && isNumber(data.round)
+      && isNumber(data.turnIndex)
+      && data.turnOrder is list
+      && data.prompt is map
+      && isString(data.mafiaId)
+      && isBool(data.endedByHostLeave);
+    }
+
+    function isPlayerDocument(data) {
+      return data.keys().hasAll([
+        'id',
+        'nickname',
+        'role',
+        'alive',
+        'isHost',
+        'joinedAt'
+      ])
+      && isString(data.id)
+      && isString(data.nickname)
+      && isPlayerRole(data.role)
+      && isBool(data.alive)
+      && isBool(data.isHost)
+      && isTimestamp(data.joinedAt);
+    }
+
+    function isDrawingDocument(data) {
+      return data.keys().hasAll([
+        'playerId',
+        'playerName',
+        'gameSession',
+        'round',
+        'turnOrder',
+        'strokes'
+      ])
+      && isString(data.playerId)
+      && isString(data.playerName)
+      && isNumber(data.gameSession)
+      && isNumber(data.round)
+      && isNumber(data.turnOrder)
+      && data.strokes is list;
+    }
+
+    function isVoteDocument(data) {
+      return data.keys().hasAll(['voterId', 'targetId'])
+      && isString(data.voterId)
+      && isString(data.targetId);
+    }
+
+    function isChatMessageDocument(data) {
+      return data.keys().hasAll(['playerId', 'nickname', 'message', 'createdAt'])
+      && isString(data.playerId)
+      && isString(data.nickname)
+      && isString(data.message)
+      && data.message.size() > 0
+      && data.message.size() <= 200
+      && isTimestamp(data.createdAt);
+    }
+
+    match /rooms/{roomId} {
+      allow read, create, update: if isRoomDocument(request.resource.data);
+      allow delete: if true;
+
+      match /players/{playerId} {
+        allow read, create, update: if isPlayerDocument(request.resource.data);
+        allow delete: if true;
+      }
+
+      match /drawingsByPlayer/{drawingId} {
+        allow read, create, update: if isDrawingDocument(request.resource.data);
+        allow delete: if true;
+      }
+
+      match /votes/{voteId} {
+        allow read, create, update: if isVoteDocument(request.resource.data);
+        allow delete: if true;
+      }
+
+      match /messages/{messageId} {
+        allow read, create, update: if isChatMessageDocument(request.resource.data);
+        allow delete: if true;
+      }
+    }
+  }
+}
