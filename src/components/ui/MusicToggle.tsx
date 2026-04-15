@@ -45,7 +45,7 @@ export function MusicToggle() {
       type="button"
       onClick={toggleMusic}
       variant="ghost"
-      className="fixed left-4 top-4 z-50 min-w-[84px] px-2 py-1 text-[10px]"
+      className="fixed left-4 top-4 z-50 hidden min-w-[84px] px-2 py-1 text-[10px] md:inline-flex"
       aria-label="배경음악 전환"
     >
       {musicEnabled ? "🎵 ON" : "🔇 OFF"}
