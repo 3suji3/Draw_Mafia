@@ -156,6 +156,8 @@ export default function GamePage() {
   const previousWinnerDialogKeyRef = useRef<string>("");
   const previousHostIdRef = useRef<string>("");
   const hostLeaveHandledRef = useRef(false);
+  const previousNetworkDelayedRef = useRef(false);
+  const previousOnlineRef = useRef(true);
   const audioContextRef = useRef<AudioContext | null>(null);
 
   const { isTestMode, testQuerySuffix } = useMemo(
@@ -863,7 +865,11 @@ export default function GamePage() {
       return;
     }
 
-    await advanceTurn();
+    try {
+      await advanceTurn();
+    } catch {
+      pushToast("턴 종료 요청이 지연됩니다. 잠시 후 다시 시도해 주세요.");
+    }
   };
 
   const handleClearCanvas = async () => {
@@ -900,6 +906,8 @@ export default function GamePage() {
         voterId: playerId,
         targetId,
       });
+    } catch {
+      pushToast("투표 등록이 지연됩니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setSubmittingVote(false);
     }
@@ -1030,6 +1038,8 @@ export default function GamePage() {
           ? `마피아가 시민 제시어를 맞춰 역전 승리 / 시민: ${citizenPromptText} / 마피아: ${mafiaPromptText}`
           : `마피아 추측 실패, 시민 승리 / 시민 정답: ${citizenPromptText} / 마피아 제시어: ${mafiaPromptText}`,
       });
+    } catch {
+      pushToast("추측 제출이 지연됩니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setSubmittingGuess(false);
     }
@@ -1079,6 +1089,8 @@ export default function GamePage() {
         resultMessage: "",
         awaitingMafiaGuess: false,
       });
+    } catch {
+      pushToast("다음 라운드 전환이 지연됩니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setContinuingRound(false);
     }
@@ -1399,6 +1411,35 @@ export default function GamePage() {
   }, [voteResultDialog.open]);
 
   useEffect(() => {
+    if (!previousOnlineRef.current && isOnline) {
+      pushToast("네트워크가 복구되었습니다.");
+    }
+
+    if (previousOnlineRef.current && !isOnline) {
+      pushToast("오프라인 상태입니다. 연결 후 자동 동기화됩니다.");
+    }
+
+    previousOnlineRef.current = isOnline;
+  }, [isOnline]);
+
+  useEffect(() => {
+    if (!room) {
+      previousNetworkDelayedRef.current = networkDelayed;
+      return;
+    }
+
+    if (!previousNetworkDelayedRef.current && networkDelayed) {
+      pushToast("실시간 동기화가 지연되고 있습니다.");
+    }
+
+    if (previousNetworkDelayedRef.current && !networkDelayed) {
+      pushToast("실시간 동기화가 정상화되었습니다.");
+    }
+
+    previousNetworkDelayedRef.current = networkDelayed;
+  }, [networkDelayed, room]);
+
+  useEffect(() => {
     const currentEliminated = room?.eliminatedPlayerId ?? null;
 
     if (currentEliminated && currentEliminated !== previousEliminatedRef.current) {
@@ -1535,7 +1576,7 @@ export default function GamePage() {
   return (
     <>
       <main className="min-h-dvh bg-dm-bg p-2 text-dm-text-primary sm:p-4 xl:h-screen xl:overflow-hidden">
-        <Card className="mx-auto flex min-h-[calc(100dvh-1rem)] w-full max-w-[1500px] flex-col p-2 sm:min-h-[calc(100dvh-2rem)] sm:p-4 xl:h-full xl:overflow-hidden" hover>
+        <Card className="mx-auto flex min-h-[calc(100dvh-1rem)] w-full max-w-[1500px] flex-col p-2 pb-24 sm:min-h-[calc(100dvh-2rem)] sm:p-4 md:pb-4 xl:h-full xl:overflow-hidden" hover>
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">DRAW MAFIA</h1>
@@ -1688,14 +1729,16 @@ export default function GamePage() {
               </div>
               <div className="mt-2 min-h-0 flex-1">
                 {room?.status === "playing" ? (
-                  <CanvasBoard
-                    strokes={renderCanvasStrokes}
-                    canDraw={canDrawNow}
-                    tool={tool}
-                    color={color}
-                    size={size}
-                    onStrokeComplete={handleStrokeComplete}
-                  />
+                  <div className={canDrawNow ? "h-full dm-canvas-touch-lock" : "h-full"}>
+                    <CanvasBoard
+                      strokes={renderCanvasStrokes}
+                      canDraw={canDrawNow}
+                      tool={tool}
+                      color={color}
+                      size={size}
+                      onStrokeComplete={handleStrokeComplete}
+                    />
+                  </div>
                 ) : (
                   <div className="relative h-full w-full">
                     <div className="grid h-full min-h-0 grid-cols-1 gap-2 md:grid-cols-[0.85fr_2.3fr_0.85fr] md:gap-2">
@@ -2007,6 +2050,44 @@ export default function GamePage() {
               </div>
             </div>
           </Card>
+
+          <div className="fixed inset-x-0 bottom-0 z-30 border-t border-dm-accent/20 bg-dm-card/95 px-3 py-2 backdrop-blur md:hidden">
+            <div className="mx-auto grid w-full max-w-[1500px] grid-cols-3 gap-2">
+              <Button
+                type="button"
+                onClick={() => setMobileSection("panel")}
+                variant={mobileSection === "panel" ? "secondary" : "ghost"}
+                className="min-w-0 px-2 py-2 text-xs"
+              >
+                정보
+              </Button>
+              <Button
+                type="button"
+                onClick={handleClearCanvas}
+                disabled={!canDrawNow || room?.status !== "playing" || clearingCanvas}
+                variant="ghost"
+                className="min-w-0 px-2 py-2 text-xs"
+              >
+                {clearingCanvas ? "지우는 중" : "전체 지우기"}
+              </Button>
+              <Button
+                type="button"
+                onClick={
+                  room?.status === "voting"
+                    ? () => setMobileSection("panel")
+                    : handleEndTurn
+                }
+                disabled={
+                  room?.status === "voting"
+                    ? false
+                    : !isMyTurn || endingTurn || room?.status !== "playing"
+                }
+                className="min-w-0 px-2 py-2 text-xs"
+              >
+                {room?.status === "voting" ? "투표로" : endingTurn ? "처리 중" : "턴 종료"}
+              </Button>
+            </div>
+          </div>
         </Card>
       </main>
 

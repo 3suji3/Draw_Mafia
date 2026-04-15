@@ -142,3 +142,14 @@ body {
     transform: translate(-50%, -50%);
   }
 }
+
+.dm-canvas-touch-lock {
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
+@media (min-width: 768px) {
+  .dm-canvas-touch-lock {
+    touch-action: auto;
+  }
+}
