@@ -118,6 +118,7 @@ export default function GamePage() {
   const [winnerDialogOpen, setWinnerDialogOpen] = useState(false);
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [rightPanelTab, setRightPanelTab] = useState<"players" | "vote">("players");
+  const [mobileSection, setMobileSection] = useState<"board" | "panel" | "tools">("board");
   const [pendingMyStrokes, setPendingMyStrokes] = useState<DrawingStroke[]>([]);
 
   const [tool, setTool] = useState<CanvasTool>("pen");
@@ -488,6 +489,15 @@ export default function GamePage() {
 
     setRightPanelTab("players");
   }, [room]);
+
+  useEffect(() => {
+    if (room?.status === "voting" || room?.status === "result" || room?.status === "ended") {
+      setMobileSection("panel");
+      return;
+    }
+
+    setMobileSection("board");
+  }, [room?.round, room?.status]);
 
   useEffect(() => {
     if (!canDrawNow) {
@@ -1631,8 +1641,37 @@ export default function GamePage() {
             </div>
           ) : null}
 
+          <Card className="mt-2 border-dm-accent/20 bg-dm-bg/40 p-2 md:hidden" hover>
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                type="button"
+                variant={mobileSection === "board" ? "secondary" : "ghost"}
+                onClick={() => setMobileSection("board")}
+                className="w-full min-w-0 px-2 py-2 text-xs"
+              >
+                보드
+              </Button>
+              <Button
+                type="button"
+                variant={mobileSection === "panel" ? "secondary" : "ghost"}
+                onClick={() => setMobileSection("panel")}
+                className="w-full min-w-0 px-2 py-2 text-xs"
+              >
+                정보
+              </Button>
+              <Button
+                type="button"
+                variant={mobileSection === "tools" ? "secondary" : "ghost"}
+                onClick={() => setMobileSection("tools")}
+                className="w-full min-w-0 px-2 py-2 text-xs"
+              >
+                도구
+              </Button>
+            </div>
+          </Card>
+
           <div className="mt-3 grid min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_380px] xl:overflow-hidden">
-            <Card className="flex min-h-[320px] flex-col border-dm-accent/20 bg-dm-bg/40 p-3 xl:min-h-0" hover>
+            <Card className={`${mobileSection !== "board" ? "hidden md:flex" : "flex"} min-h-[320px] flex-col border-dm-accent/20 bg-dm-bg/40 p-3 xl:min-h-0`} hover>
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold text-dm-text-secondary">DRAW BOARD</h2>
                 <p className="text-[10px] text-dm-text-secondary">
@@ -1659,8 +1698,8 @@ export default function GamePage() {
                   />
                 ) : (
                   <div className="relative h-full w-full">
-                    <div className="grid h-full min-h-0 grid-cols-[0.85fr_2.3fr_0.85fr] gap-2 sm:grid-cols-[1fr_2.6fr_1fr]">
-                      <div className="flex min-h-0 flex-col">
+                    <div className="grid h-full min-h-0 grid-cols-1 gap-2 md:grid-cols-[0.85fr_2.3fr_0.85fr] md:gap-2">
+                      <div className="hidden min-h-0 flex-col md:flex">
                         <p className="truncate pb-1 text-[10px] text-dm-text-secondary text-left">
                           {prevGalleryDrawing?.playerName ?? ""}
                         </p>
@@ -1708,7 +1747,7 @@ export default function GamePage() {
                         </Button>
                       </div>
 
-                      <div className="flex min-h-0 flex-col">
+                      <div className="hidden min-h-0 flex-col md:flex">
                         <p className="truncate pb-1 text-[10px] text-dm-text-secondary text-right">
                           {nextGalleryDrawing?.playerName ?? ""}
                         </p>
@@ -1732,7 +1771,7 @@ export default function GamePage() {
               </div>
             </Card>
 
-            <div className="flex min-h-0 flex-col gap-3 xl:overflow-y-auto xl:pr-1">
+            <div className={`${mobileSection !== "panel" ? "hidden md:flex" : "flex"} min-h-0 flex-col gap-3 xl:overflow-y-auto xl:pr-1`}>
               <Card className="border-dm-accent/20 bg-dm-bg/40 p-3" hover>
                 <p className="text-[10px] font-semibold text-dm-text-secondary">현재 턴 플레이어</p>
                 <p className="mt-1 text-sm font-semibold text-dm-accent">{currentTurnPlayer?.nickname ?? "대기 중"}</p>
@@ -1890,7 +1929,7 @@ export default function GamePage() {
             </div>
           </div>
 
-          <Card className="relative z-20 mt-3 shrink-0 border-dm-accent/20 bg-dm-bg/40 p-3" hover>
+          <Card className={`${mobileSection !== "tools" ? "hidden md:block" : "block"} relative z-20 mt-3 shrink-0 border-dm-accent/20 bg-dm-bg/40 p-3`} hover>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-[auto_1fr_auto] md:items-center">
               <div className="flex flex-wrap items-center gap-2">
                 <button
