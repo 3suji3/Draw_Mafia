@@ -1,8 +1,11 @@
+export type ChatChannel = "public" | "ghost";
+
 export type ChatMessage = {
   id: string;
   playerId: string;
   nickname: string;
   message: string;
+  audience?: ChatChannel;
   createdAt: unknown; // Firestore Timestamp
 };
 

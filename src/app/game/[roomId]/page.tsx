@@ -593,7 +593,13 @@ export default function GamePage() {
     };
   }, [eligibleVoterIds, votes]);
 
-  const canChatInResult = Boolean(room?.status === "result" && room.eliminatedPlayerId === playerId);
+  const isGhostChat = Boolean(
+    room &&
+      currentPlayer &&
+      !currentPlayer.alive &&
+      (room.status === "result" || room.status === "ended")
+  );
+  const canUseChat = room?.status === "voting" || isGhostChat;
 
   const visiblePrompt = useMemo(() => {
     if (!room || !currentPlayer) {
@@ -1626,19 +1632,15 @@ export default function GamePage() {
               >
                 {soundEnabled ? "SOUND ON" : "SOUND OFF"}
               </Button>
-              <ChatPanel
-                roomId={resolvedRoomId}
-                playerId={playerId}
-                nickname={currentPlayer?.nickname ?? "익명"}
-                isEnabled={room?.status === "voting" || canChatInResult}
-                disabledReason={
-                  room?.status === "playing"
-                    ? "그림을 그리는 중에는 채팅할 수 없어요"
-                    : canChatInResult
-                      ? "최다 득표자는 결과 단계에서 채팅할 수 있어요"
-                    : "채팅은 대기방과 투표 단계에서만 가능합니다"
-                }
-              />
+              {canUseChat ? (
+                <ChatPanel
+                  roomId={resolvedRoomId}
+                  playerId={playerId}
+                  nickname={currentPlayer?.nickname ?? "익명"}
+                  isEnabled={true}
+                  channel={isGhostChat ? "ghost" : "public"}
+                />
+              ) : null}
               <Button
                 type="button"
                 onClick={() => setLeaveConfirmOpen(true)}

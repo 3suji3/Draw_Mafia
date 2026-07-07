@@ -254,9 +254,9 @@ export default function RoomPage() {
       if (room.endedByHostLeave && !hostLeaveHandledRef.current) {
         hostLeaveHandledRef.current = true;
         openDialog("방 종료", "방장이 나가서 방이 종료되었습니다. 홈으로 이동합니다.");
+        router.push("/");
       }
 
-      router.push("/");
       return;
     }
 

@@ -11,12 +11,12 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@/firebase/firebase";
-import type { ChatMessage } from "@/types/chat";
+import type { ChatChannel, ChatMessage } from "@/types/chat";
 import { CHAT_MAX_LENGTH } from "@/types/chat";
 
 const MESSAGES_LIMIT = 100;
 
-export function useChat(roomId: string) {
+export function useChat(roomId: string, channel: ChatChannel = "public") {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   useEffect(() => {
@@ -33,11 +33,14 @@ export function useChat(roomId: string) {
         id: docSnap.id,
         ...(docSnap.data() as Omit<ChatMessage, "id">),
       }));
-      setMessages(msgs);
+
+      setMessages(
+        msgs.filter((message) => (message.audience ?? "public") === channel)
+      );
     });
 
     return unsubscribe;
-  }, [roomId]);
+  }, [channel, roomId]);
 
   const sendMessage = async (
     text: string,
@@ -51,6 +54,7 @@ export function useChat(roomId: string) {
       playerId,
       nickname,
       message: trimmed,
+      audience: channel,
       createdAt: serverTimestamp(),
     });
   };

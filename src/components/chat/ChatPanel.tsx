@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useChat } from "@/hooks/useChat";
 import { CHAT_EMOJI_LIST, CHAT_MAX_LENGTH } from "@/types/chat";
+import type { ChatChannel } from "@/types/chat";
 
 const TABLET_MEDIA_QUERY = "(min-width: 768px)";
 const BOTTOM_THRESHOLD_PX = 80;
@@ -13,6 +14,7 @@ type Props = {
   playerId: string;
   nickname: string;
   isEnabled: boolean;
+  channel?: ChatChannel;
   disabledReason?: string;
 };
 
@@ -29,7 +31,7 @@ function formatTime(createdAt: unknown): string {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
-export function ChatPanel({ roomId, playerId, nickname, isEnabled, disabledReason }: Props) {
+export function ChatPanel({ roomId, playerId, nickname, isEnabled, channel = "public", disabledReason }: Props) {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [sending, setSending] = useState(false);
@@ -46,7 +48,7 @@ export function ChatPanel({ roomId, playerId, nickname, isEnabled, disabledReaso
   const hasInitializedRef = useRef(false);
   const isNearBottomRef = useRef(true);
 
-  const { messages, sendMessage } = useChat(roomId);
+  const { messages, sendMessage } = useChat(roomId, channel);
 
   useEffect(() => {
     setMounted(true);
@@ -216,7 +218,9 @@ export function ChatPanel({ roomId, playerId, nickname, isEnabled, disabledReaso
                 className="flex shrink-0 items-center justify-between px-4 py-3"
                 style={{ borderBottom: "1px solid rgb(var(--dm-card-border))" }}
               >
-                <span className="text-sm font-semibold text-dm-text-primary">채팅</span>
+                <span className="text-sm font-semibold text-dm-text-primary">
+                  {channel === "ghost" ? "유령 채팅" : "채팅"}
+                </span>
                 <button
                   type="button"
                   onClick={handleClose}
@@ -340,7 +344,7 @@ export function ChatPanel({ roomId, playerId, nickname, isEnabled, disabledReaso
                     onKeyDown={handleKeyDown}
                     onFocus={() => setIsInputFocused(true)}
                     onBlur={() => setIsInputFocused(false)}
-                    placeholder={isEnabled ? "메시지 입력..." : "채팅 불가"}
+                    placeholder={isEnabled ? (channel === "ghost" ? "유령 메시지 입력..." : "메시지 입력...") : "채팅 불가"}
                     disabled={!isEnabled}
                     maxLength={CHAT_MAX_LENGTH}
                     className="dm-input flex-1 disabled:cursor-not-allowed disabled:opacity-50"
