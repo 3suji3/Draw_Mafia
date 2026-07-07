@@ -593,6 +593,8 @@ export default function GamePage() {
     };
   }, [eligibleVoterIds, votes]);
 
+  const canChatInResult = Boolean(room?.status === "result" && room.eliminatedPlayerId === playerId);
+
   const visiblePrompt = useMemo(() => {
     if (!room || !currentPlayer) {
       return "";
@@ -1628,10 +1630,12 @@ export default function GamePage() {
                 roomId={resolvedRoomId}
                 playerId={playerId}
                 nickname={currentPlayer?.nickname ?? "익명"}
-                isEnabled={room?.status === "voting"}
+                isEnabled={room?.status === "voting" || canChatInResult}
                 disabledReason={
                   room?.status === "playing"
                     ? "그림을 그리는 중에는 채팅할 수 없어요"
+                    : canChatInResult
+                      ? "최다 득표자는 결과 단계에서 채팅할 수 있어요"
                     : "채팅은 대기방과 투표 단계에서만 가능합니다"
                 }
               />
@@ -2065,49 +2069,58 @@ export default function GamePage() {
         title="GAME END"
         onOpenChange={setGameEndDialogOpen}
         footer={
-          <>
-            {!hasRestartConsented ? (
+          <div className="flex w-full flex-col gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+              {!hasRestartConsented ? (
+                <Button
+                  type="button"
+                  onClick={() => void handleRestartConsent()}
+                  variant="secondary"
+                  className="min-w-[140px]"
+                >
+                  재시작 동의
+                </Button>
+              ) : (
+                <Button type="button" disabled variant="ghost" className="min-w-[140px]">
+                  동의 완료
+                </Button>
+              )}
+              {isHost ? (
+                <Button
+                  type="button"
+                  onClick={() => void handleRestartGame()}
+                  disabled={!allRestartConsented || restartingGame}
+                  variant="primary"
+                  className="min-w-[140px]"
+                >
+                  {restartingGame ? "재시작 중..." : "같은 방 다시 시작"}
+                </Button>
+              ) : null}
               <Button
                 type="button"
-                onClick={() => void handleRestartConsent()}
+                onClick={() => router.push(`/room/${resolvedRoomId}`)}
                 variant="secondary"
-                className="min-w-[140px]"
+                className="min-w-[110px]"
               >
-                재시작 동의
+                대기방
               </Button>
-            ) : (
-              <Button type="button" disabled variant="ghost" className="min-w-[140px]">
-                동의 완료
-              </Button>
-            )}
-            {isHost ? (
               <Button
                 type="button"
-                onClick={() => void handleRestartGame()}
-                disabled={!allRestartConsented || restartingGame}
-                variant="primary"
-                className="min-w-[140px]"
+                onClick={() => router.push("/")}
+                variant="secondary"
+                className="min-w-[80px]"
               >
-                {restartingGame ? "재시작 중..." : allRestartConsented ? "같은 방 다시 시작" : "모두 동의 필요"}
+                홈
               </Button>
-            ) : null}
-            <Button
-              type="button"
-              onClick={() => router.push(`/room/${resolvedRoomId}`)}
-              variant="secondary"
-              className="min-w-[110px]"
-            >
-              대기방
-            </Button>
-            <Button
-              type="button"
-              onClick={() => router.push("/")}
-              variant="secondary"
-              className="min-w-[80px]"
-            >
-              홈
-            </Button>
-          </>
+            </div>
+            <p className="text-right text-[11px] text-dm-text-secondary">
+              {isHost
+                ? allRestartConsented
+                  ? "모든 플레이어가 동의하면 방장이 새 게임을 시작할 수 있습니다."
+                  : "모두 동의 필요"
+                : "재시작 동의 후 결과를 확인할 수 있습니다."}
+            </p>
+          </div>
         }
       >
         <p className="text-xs text-dm-text-primary">
@@ -2127,13 +2140,6 @@ export default function GamePage() {
         </p>
         <p className="text-[11px] text-dm-text-secondary">
           재시작 동의: {restartConsentCount} / {players.length}
-        </p>
-        <p className="text-[11px] text-dm-text-secondary">
-          {isHost
-            ? allRestartConsented
-              ? "모든 플레이어가 동의하면 방장이 같은 방 다시 시작을 눌러 새 게임을 시작할 수 있습니다."
-              : "모든 플레이어의 재시작 동의가 모여야 방장이 새 게임을 시작할 수 있습니다."
-            : "재시작에 동의하거나 대기방/홈으로 이동할 수 있습니다."}
         </p>
       </GameDialog>
 
