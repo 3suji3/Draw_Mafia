@@ -115,7 +115,7 @@ export default function GamePage() {
     open: false,
     message: "",
   });
-  const [winnerDialogOpen, setWinnerDialogOpen] = useState(false);
+  const [gameEndDialogOpen, setGameEndDialogOpen] = useState(false);
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [rightPanelTab, setRightPanelTab] = useState<"players" | "vote">("players");
   const [mobileSection, setMobileSection] = useState<"board" | "panel" | "tools">("board");
@@ -153,7 +153,6 @@ export default function GamePage() {
   const autoContinuedRoundKeyRef = useRef<string>("");
   const autoFinalizedMafiaGuessTimeoutKeyRef = useRef<string>("");
   const previousEliminatedRef = useRef<string | null>(null);
-  const previousWinnerDialogKeyRef = useRef<string>("");
   const previousHostIdRef = useRef<string>("");
   const hostLeaveHandledRef = useRef(false);
   const previousNetworkDelayedRef = useRef(false);
@@ -491,6 +490,12 @@ export default function GamePage() {
 
     setRightPanelTab("players");
   }, [room]);
+
+  useEffect(() => {
+    if (room?.status && room.status !== "waiting") {
+      setStartDialogOpen(false);
+    }
+  }, [room?.status]);
 
   useEffect(() => {
     if (room?.status === "voting" || room?.status === "result" || room?.status === "ended") {
@@ -995,6 +1000,7 @@ export default function GamePage() {
         updates.status = "ended";
         updates.winner = "mafia";
         updates.resultMessage = "마피아와 시민 수가 1:1이 되어 마피아 승리";
+        updates.restartConsentIds = [];
       }
 
       await updateDoc(roomRef, updates);
@@ -1034,6 +1040,7 @@ export default function GamePage() {
         status: "ended",
         winner: isCorrect ? "mafia" : "citizen",
         awaitingMafiaGuess: false,
+        restartConsentIds: [],
         resultMessage: isCorrect
           ? `마피아가 시민 제시어를 맞춰 역전 승리 / 시민: ${citizenPromptText} / 마피아: ${mafiaPromptText}`
           : `마피아 추측 실패, 시민 승리 / 시민 정답: ${citizenPromptText} / 마피아 제시어: ${mafiaPromptText}`,
@@ -1074,6 +1081,7 @@ export default function GamePage() {
           winner: "citizen",
           resultMessage: "마피아가 모두 제거되어 시민 승리",
           awaitingMafiaGuess: false,
+          restartConsentIds: [],
         });
         return;
       }
@@ -1093,6 +1101,20 @@ export default function GamePage() {
       pushToast("다음 라운드 전환이 지연됩니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setContinuingRound(false);
+    }
+  };
+
+  const handleRestartConsent = async () => {
+    if (!room || room.status !== "ended" || room.endedByHostLeave || hasRestartConsented) {
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, "rooms", resolvedRoomId), {
+        restartConsentIds: arrayUnion(playerId),
+      });
+    } catch {
+      pushToast("재시작 동의 등록이 지연됩니다. 잠시 후 다시 시도해 주세요.");
     }
   };
 
@@ -1240,6 +1262,7 @@ export default function GamePage() {
           status: "ended",
           winner: "citizen",
           awaitingMafiaGuess: false,
+          restartConsentIds: [],
           resultMessage: `마피아 추측 시간(${MAFIA_GUESS_TIME_SECONDS}초) 초과, 시민 승리 / 시민 정답: ${toCitizenPromptText(latestRoom.prompt)} / 마피아 제시어: ${toMafiaPromptText(latestRoom.prompt)}`,
         });
       } catch {
@@ -1275,14 +1298,13 @@ export default function GamePage() {
       .map((player) => player.nickname);
   }, [players, room?.winner]);
 
-  const isCurrentPlayerWinner = useMemo(() => {
-    if (!currentPlayer || !room?.winner) {
-      return false;
-    }
-
-    const winnerRole = room.winner === "mafia" ? "mafia" : "citizen";
-    return currentPlayer.role === winnerRole;
-  }, [currentPlayer, room?.winner]);
+  const restartConsentIds = room?.restartConsentIds ?? [];
+  const hasRestartConsented = restartConsentIds.includes(playerId);
+  const restartConsentCount = useMemo(
+    () => players.filter((player) => restartConsentIds.includes(player.id)).length,
+    [players, restartConsentIds]
+  );
+  const allRestartConsented = players.length > 0 && players.every((player) => restartConsentIds.includes(player.id));
 
   const stageGuide = useMemo(
     () => [
@@ -1390,19 +1412,13 @@ export default function GamePage() {
   }, [votedCount]);
 
   useEffect(() => {
-    if (!room || room.status !== "ended" || !room.winner || !currentPlayer || !isCurrentPlayerWinner) {
+    if (!room || room.status !== "ended" || room.endedByHostLeave) {
+      setGameEndDialogOpen(false);
       return;
     }
 
-    const winnerDialogKey = `${currentGameSession}-${room.round}-${room.winner}-${currentPlayer.id}`;
-
-    if (previousWinnerDialogKeyRef.current === winnerDialogKey) {
-      return;
-    }
-
-    previousWinnerDialogKeyRef.current = winnerDialogKey;
-    setWinnerDialogOpen(true);
-  }, [currentPlayer, isCurrentPlayerWinner, room]);
+    setGameEndDialogOpen(true);
+  }, [room?.endedByHostLeave, room?.status]);
 
   useEffect(() => {
     if (voteResultDialog.open) {
@@ -1510,6 +1526,11 @@ export default function GamePage() {
       return;
     }
 
+    if (!allRestartConsented) {
+      pushToast("모든 플레이어의 재시작 동의가 필요합니다.");
+      return;
+    }
+
     setRestartingGame(true);
 
     try {
@@ -1549,6 +1570,7 @@ export default function GamePage() {
         resultMessage: "",
         winner: null,
         awaitingMafiaGuess: false,
+        restartConsentIds: [],
       });
 
       currentPlayers.forEach((player) => {
@@ -1561,7 +1583,6 @@ export default function GamePage() {
       });
 
       await batch.commit();
-      setStartDialogOpen(true);
       pushToast("같은 방에서 새 게임을 시작했습니다.");
     } catch {
       setVoteResultDialog({
@@ -1934,40 +1955,9 @@ export default function GamePage() {
               ) : null}
 
               {room?.status === "ended" ? (
-                <Card className="border-dm-secondary/45 bg-dm-bg/50 p-3" hover>
-                  <h3 className="text-sm font-bold text-dm-secondary">GAME END</h3>
-                  <p className="mt-1 text-xs text-dm-text-primary">승리 팀: {room.winner === "mafia" ? "마피아" : "시민"}</p>
-                  <p className="text-xs text-dm-accent">승리자: {winnerNicknames.length > 0 ? winnerNicknames.join(", ") : "확인 불가"}</p>
-                  <p className="mt-2 text-[11px] text-dm-text-secondary">
-                    {isHost
-                      ? "다음 게임은 '같은 방 다시 시작' 버튼을 눌러 시작하세요."
-                      : "방장이 다시 시작할 때까지 대기하거나 홈으로 이동할 수 있습니다."}
-                  </p>
-                  <p className="mt-2 text-[11px] text-dm-text-secondary">
-                    시민 제시어: <span className="font-semibold text-dm-text-primary">{citizenPromptText || "-"}</span>
-                  </p>
-                  <p className="text-[11px] text-dm-text-secondary">
-                    마피아 제시어: <span className="font-semibold text-dm-text-primary">{mafiaPromptText || "-"}</span>
-                  </p>
-                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <Button
-                      type="button"
-                      onClick={() => router.push(`/room/${resolvedRoomId}`)}
-                      variant="secondary"
-                      className="w-full px-3 py-2 text-sm"
-                    >
-                      대기방
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={() => router.push("/")}
-                      variant="secondary"
-                      className="w-full px-3 py-2 text-sm"
-                    >
-                      홈
-                    </Button>
-                  </div>
-                </Card>
+                <div className="rounded-xl border border-dm-secondary/20 bg-dm-bg/35 p-3 text-xs text-dm-text-secondary">
+                  게임 종료 상태입니다. 결과는 중앙 모달에서 확인할 수 있습니다.
+                </div>
               ) : null}
             </div>
           </div>
@@ -2071,11 +2061,81 @@ export default function GamePage() {
       />
 
       <GameDialog
-        open={winnerDialogOpen}
-        title="🎉 승리!"
-        description={`축하합니다! ${currentPlayer?.nickname ?? "플레이어"}님이 승리 팀(${room?.winner === "mafia" ? "마피아" : "시민"})에 포함되었습니다.`}
-        onOpenChange={setWinnerDialogOpen}
-      />
+        open={gameEndDialogOpen}
+        title="GAME END"
+        onOpenChange={setGameEndDialogOpen}
+        footer={
+          <>
+            {!hasRestartConsented ? (
+              <Button
+                type="button"
+                onClick={() => void handleRestartConsent()}
+                variant="secondary"
+                className="min-w-[140px]"
+              >
+                재시작 동의
+              </Button>
+            ) : (
+              <Button type="button" disabled variant="ghost" className="min-w-[140px]">
+                동의 완료
+              </Button>
+            )}
+            {isHost ? (
+              <Button
+                type="button"
+                onClick={() => void handleRestartGame()}
+                disabled={!allRestartConsented || restartingGame}
+                variant="primary"
+                className="min-w-[140px]"
+              >
+                {restartingGame ? "재시작 중..." : allRestartConsented ? "같은 방 다시 시작" : "모두 동의 필요"}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              onClick={() => router.push(`/room/${resolvedRoomId}`)}
+              variant="secondary"
+              className="min-w-[110px]"
+            >
+              대기방
+            </Button>
+            <Button
+              type="button"
+              onClick={() => router.push("/")}
+              variant="secondary"
+              className="min-w-[80px]"
+            >
+              홈
+            </Button>
+          </>
+        }
+      >
+        <p className="text-xs text-dm-text-primary">
+          승리 팀: {room?.winner === "mafia" ? "마피아" : "시민"}
+        </p>
+        <p className="text-xs text-dm-accent">
+          승리자: {winnerNicknames.length > 0 ? winnerNicknames.join(", ") : "확인 불가"}
+        </p>
+        <p className="text-xs text-dm-text-secondary">
+          {room?.resultMessage || "게임이 종료되었습니다."}
+        </p>
+        <p className="text-[11px] text-dm-text-secondary">
+          시민 제시어: <span className="font-semibold text-dm-text-primary">{citizenPromptText || "-"}</span>
+        </p>
+        <p className="text-[11px] text-dm-text-secondary">
+          마피아 제시어: <span className="font-semibold text-dm-text-primary">{mafiaPromptText || "-"}</span>
+        </p>
+        <p className="text-[11px] text-dm-text-secondary">
+          재시작 동의: {restartConsentCount} / {players.length}
+        </p>
+        <p className="text-[11px] text-dm-text-secondary">
+          {isHost
+            ? allRestartConsented
+              ? "모든 플레이어가 동의하면 방장이 같은 방 다시 시작을 눌러 새 게임을 시작할 수 있습니다."
+              : "모든 플레이어의 재시작 동의가 모여야 방장이 새 게임을 시작할 수 있습니다."
+            : "재시작에 동의하거나 대기방/홈으로 이동할 수 있습니다."}
+        </p>
+      </GameDialog>
 
       <ConfirmDialog
         open={leaveConfirmOpen}

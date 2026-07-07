@@ -23,7 +23,7 @@ export function MusicToggle() {
     window.localStorage.setItem(MUSIC_ENABLED_KEY, String(nextState));
 
     // 음악 즉시 제어
-    const audio = document.querySelector("audio");
+    const audio = document.querySelector<HTMLAudioElement>('audio[title="배경음악"]');
     if (audio) {
       if (nextState) {
         // ON으로 토글할 때: loop 재설정 후 재생

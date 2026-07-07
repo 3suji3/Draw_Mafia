@@ -57,8 +57,8 @@ export function RuleGuideModal({ open, onOpenChange }: RuleGuideModalProps) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="dm-dialog-overlay fixed inset-0 bg-dm-bg/70 backdrop-blur-sm" />
-        <Dialog.Content className="dm-dialog-content fixed left-1/2 top-1/2 w-[94vw] max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-dm-border/80 bg-dm-card/95 p-4 shadow-dm-soft outline-none sm:p-6">
+        <Dialog.Overlay className="dm-dialog-overlay fixed inset-0 z-50 bg-dm-bg/70 backdrop-blur-sm" />
+        <Dialog.Content className="dm-dialog-content fixed left-1/2 top-1/2 z-[60] w-[94vw] max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-dm-border/80 bg-dm-card/95 p-4 shadow-dm-soft outline-none sm:p-6">
           <div className="flex items-start justify-between gap-3 border-b border-dm-border/70 pb-4">
             <div>
               <Dialog.Title className="text-xl font-bold tracking-tight text-dm-text-primary">

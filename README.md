@@ -107,7 +107,8 @@
 오디오/테마:
 
 - HTML5 Audio API
-- 테마별 배경음악 지원 (라이트 모드: S*, 다크 모드: O* 파일명 매핑)
+- 테마별 배경음악 지원 (라이트: `Coloring_Outside_the_Lines.mp3`, 다크: `Charcoal_Chromatic_Chaos.mp3`)
+- Chrome autoplay 정책 때문에 최초 재생이 막히면 첫 사용자 상호작용에서 자동 재시도
 
 배포/런타임:
 

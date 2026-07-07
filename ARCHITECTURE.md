@@ -85,11 +85,12 @@ ACTION_PAIRS (51개)
 배경음악은 `BackgroundMusicPlayer` 컴포넌트로 관리된다.
 
 - 테마 변경 시 자동으로 음악 파일 전환
-- 라이트 모드: `S*.mp3` 패턴 (예: Shtriker Big Band - Lemonade.mp3)
-- 다크 모드: `O*.mp3` 패턴 (예: O P Baron - Honey You're My Sweetie.mp3)
+- 라이트 모드: `Coloring_Outside_the_Lines.mp3`
+- 다크 모드: `Charcoal_Chromatic_Chaos.mp3`
 - 저장 위치: `public/` 폴더
 - 제어: localStorage의 `draw_mafia_music_volume` 키로 볼륨 관리
 - HTML5 Audio API 기반, 루프 재생 지원
+- Chrome autoplay 정책으로 초기 재생이 막히면 첫 사용자 상호작용 때 자동 재시도
 
 ## 9. 동기화 전략
 

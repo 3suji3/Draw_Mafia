@@ -5,9 +5,12 @@ import { usePathname } from "next/navigation";
 
 const MUSIC_VOLUME_KEY = "draw_mafia_music_volume";
 const MUSIC_ENABLED_KEY = "draw_mafia_music_enabled";
+const RETRY_EVENTS = ["pointerdown", "keydown", "touchstart", "click"] as const;
 
 export function BackgroundMusicPlayer() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lastSrcRef = useRef("");
+  const retryListenersRef = useRef<Array<[string, EventListener]>>([]);
   const [isReady, setIsReady] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<"dark" | "light">("dark");
   const pathname = usePathname();
@@ -45,28 +48,56 @@ export function BackgroundMusicPlayer() {
     const audio = audioRef.current;
     const musicEnabled = window.localStorage.getItem(MUSIC_ENABLED_KEY) !== "false";
 
+    const cleanupRetryListeners = () => {
+      for (const [eventName, handler] of retryListenersRef.current) {
+        document.removeEventListener(eventName, handler, true);
+      }
+      retryListenersRef.current = [];
+    };
+
+    const attachRetryListeners = () => {
+      if (retryListenersRef.current.length > 0) {
+        return;
+      }
+
+      const tryResumePlayback = () => {
+        const currentAudio = audioRef.current;
+        const retryEnabled = window.localStorage.getItem(MUSIC_ENABLED_KEY) !== "false";
+
+        if (!currentAudio || !retryEnabled || !currentAudio.paused) {
+          cleanupRetryListeners();
+          return;
+        }
+
+        void currentAudio.play()
+          .then(() => {
+            cleanupRetryListeners();
+            console.log(
+              `[배경음악] ${currentTheme === "light" ? "라이트" : "다크"}모드 음악 ${isGamePage ? "(무한 반복 중, 음소거)" : "(배경음악 재생 중)"} ✓`
+            );
+          })
+          .catch(() => {
+            // 다음 사용자 상호작용을 기다린다.
+          });
+      };
+
+      retryListenersRef.current = RETRY_EVENTS.map((eventName) => {
+        const handler: EventListener = () => {
+          tryResumePlayback();
+        };
+
+        document.addEventListener(eventName, handler, true);
+        return [eventName, handler];
+      });
+    };
+
     // 무한 반복 설정 (항상 활성화)
     audio.loop = true;
-
-    // AudioContext resume (자동재생 정책용)
-    const resumeAudioContext = async () => {
-      try {
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioContext) {
-          const ctx = new AudioContext();
-          if (ctx.state === "suspended") {
-            await ctx.resume();
-          }
-        }
-      } catch (err) {
-        // AudioContext 초기화 실패는 무시
-      }
-    };
 
     // URL 인코딩된 파일 경로
     const themeMusicMap: Record<"light" | "dark", string> = {
       light: "/Coloring_Outside_the_Lines.mp3",
-      "dark": "/Charcoal_Chromatic_Chaos.mp3",
+      dark: "/Charcoal_Chromatic_Chaos.mp3",
     };
 
     const newSrc = themeMusicMap[currentTheme];
@@ -75,8 +106,9 @@ export function BackgroundMusicPlayer() {
     audio.volume = volume;
 
     // 음악 파일 변경
-    if (audio.src !== newSrc) {
+    if (lastSrcRef.current !== newSrc) {
       audio.src = newSrc;
+      lastSrcRef.current = newSrc;
       audio.load();
     }
 
@@ -90,20 +122,33 @@ export function BackgroundMusicPlayer() {
     // 음악 ON 상태면 재생
     if (musicEnabled) {
       if (audio.paused) {
-        audio.play().catch((err: any) => {
-          console.warn("[배경음악] 재생 실패:", err?.message || err);
-        });
+        void audio.play()
+          .then(() => {
+            cleanupRetryListeners();
+            console.log(
+              `[배경음악] ${currentTheme === "light" ? "라이트" : "다크"}모드 음악 ${isGamePage ? "(무한 반복 중, 음소거)" : "(배경음악 재생 중)"} ✓`
+            );
+          })
+          .catch((err: any) => {
+            console.warn("[배경음악] 재생 실패:", err?.message || err);
+            attachRetryListeners();
+          });
+      } else {
+        cleanupRetryListeners();
+        console.log(
+          `[배경음악] ${currentTheme === "light" ? "라이트" : "다크"}모드 음악 ${isGamePage ? "(무한 반복 중, 음소거)" : "(배경음악 재생 중)"} ✓`
+        );
       }
-      const status = isGamePage ? "(무한 반복 중, 음소거)" : "(배경음악 재생 중)";
-      console.log(
-        `[배경음악] ${currentTheme === "light" ? "라이트" : "다크"}모드 음악 ${status} ✓`
-      );
     } else {
       // 음악이 OFF일 때는 중지
       if (!audio.paused) {
         audio.pause();
       }
+      cleanupRetryListeners();
     }
+    return () => {
+      cleanupRetryListeners();
+    };
   }, [isReady, currentTheme, isGamePage]);
 
   if (!isReady) return null;

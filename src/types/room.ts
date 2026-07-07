@@ -25,6 +25,7 @@ export type Room = {
   winner?: "mafia" | "citizen" | null;
   awaitingMafiaGuess?: boolean;
   endedByHostLeave?: boolean;
+  restartConsentIds?: string[];
 };
 
 export type Player = {
